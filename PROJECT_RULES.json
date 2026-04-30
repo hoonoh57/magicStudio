@@ -1,0 +1,55 @@
+{
+  "project_id": "magicStudio",
+  "version": "0.1.0",
+  "encoding": "utf-8",
+  "rules": [
+    "모든 텍스트 파일은 UTF-8로 저장한다.",
+    "프로젝트 루트에 TODO.md 없이 기능 구현을 시작하지 않는다.",
+    "한 작업은 최대 5개 파일까지만 수정한다.",
+    "대형 파일은 전체 재작성하지 않고 앵커 기반 replace block으로 수정한다.",
+    "사용자가 수정한 locked 파일은 자동 수정하지 않는다.",
+    "Provider 구현은 core 엔진에 직접 결합하지 않는다.",
+    "내부 표준은 VML과 timeline.json이다.",
+    "외부 API는 Provider 플러그인으로만 연결한다.",
+    "UI는 core 엔진을 직접 변경하지 않고 service 계층만 호출한다.",
+    "검증 명령이 없는 작업은 완료로 인정하지 않는다.",
+    "실패 후 임의 재수정하지 않고 failure_report를 작성한다."
+  ],
+  "forbidden": [
+    "findstr로 전체 프로젝트를 뒤져 임의 수정",
+    "인코딩 지정 없는 PowerShell Set-Content",
+    "전체 파일 재작성으로 소규모 수정 처리",
+    "테스트 없이 성공 보고",
+    "Provider 코드를 core 엔진에 직접 하드코딩",
+    "사용자 수동 수정 파일 덮어쓰기",
+    "execution_contract 없이 코드 수정",
+    "TODO.md와 무관한 즉흥 기능 추가"
+  ],
+  "required_checks": [
+    "python -m py_compile",
+    "pytest",
+    "schema validation",
+    "timeline.json validation",
+    "UTF-8 file scan",
+    "git status --short",
+    "git diff --stat"
+  ],
+  "module_boundaries": {
+    "core": "장르 독립 엔진",
+    "genre_profiles": "장르별 데이터 규칙",
+    "plugins": "외부 Provider 연결",
+    "exporters": "편집기/파일 출력",
+    "ui": "사용자 인터페이스",
+    "tools": "검증/패치/빌드 보조 도구"
+  },
+  "internal_standards": {
+    "scene_language": "VML",
+    "edit_timeline": "timeline.json",
+    "subtitle": [
+      "srt",
+      "ass"
+    ],
+    "project_config": "project.json",
+    "production_bible": "project_bible.json"
+  }
+}

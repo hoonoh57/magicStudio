@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# magicStudio generated outputs
+projects/*/renders/
+projects/*/exports/
+projects/*/assets/generated/
+*.mp4
+*.wav
+*.tmp
+*.bak
+
+# DB
+*.db
+*.sqlite
+*.sqlite3

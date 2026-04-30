@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "magicStudio Execution Contract",
+  "type": "object",
+  "required": [
+    "task_id",
+    "goal",
+    "allowed_files",
+    "steps",
+    "success_criteria",
+    "verification_commands",
+    "rollback_policy",
+    "failure_report_schema"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "Stable task identifier, e.g. MAGIC-MVP-001"
+    },
+    "goal": {
+      "type": "string"
+    },
+    "context": {
+      "type": "string"
+    },
+    "allowed_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "forbidden_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "writes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reads": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "success_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "verification_commands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rollback_policy": {
+      "type": "object",
+      "required": [
+        "on_failure"
+      ],
+      "properties": {
+        "on_failure": {
+          "type": "string",
+          "enum": [
+            "restore_to_last_clean_commit",
+            "do_not_rollback_report_only",
+            "manual_review_required"
+          ]
+        },
+        "requires_clean_git_before_start": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "failure_report_schema": {
+      "type": "object",
+      "required": [
+        "required"
+      ],
+      "properties": {
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "stdout",
+              "stderr",
+              "exit_code",
+              "changed_files",
+              "git_status_short",
+              "git_diff_stat",
+              "rollback_done",
+              "rollback_target_commit",
+              "failure_class",
+              "repro_command"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
