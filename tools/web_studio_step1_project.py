@@ -42,17 +42,17 @@ HTML = '''<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>magicStudio Step 1</title>
 <style>
-:root{--bg:#070a12;--card:#111827;--line:#2f3d5a;--text:#f5f7ff;--muted:#9caac4;--accent:#7b5cff;--good:#42d392;--warn:#ffd166;--bad:#ff6b6b}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#070a12,#0e1629);color:var(--text);font-family:Segoe UI,Malgun Gothic,Apple SD Gothic Neo,sans-serif}.app{max-width:1180px;margin:0 auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.brand{font-size:28px;font-weight:900}.badge{padding:8px 12px;border-radius:999px;background:#172139;border:1px solid var(--line);color:#d9e2ff}.grid{display:grid;grid-template-columns:320px 1fr;gap:16px}.card{background:#111827;border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:0 22px 70px #0008}.head{padding:15px 18px;background:#172139;border-bottom:1px solid var(--line);font-weight:900}.body{padding:18px}input,textarea{width:100%;background:#080f1f;color:var(--text);border:1px solid #34455f;border-radius:14px;padding:12px;outline:none}textarea{min-height:420px;line-height:1.6;resize:vertical}label{display:block;margin:12px 0 6px;color:var(--muted);font-size:13px}button{border:0;border-radius:14px;padding:13px 14px;font-weight:850;cursor:pointer;background:#283754;color:#eef3ff}.primary{background:linear-gradient(135deg,#6c54ff,#9b78ff)}.good{background:linear-gradient(135deg,#2fd084,#80eab5);color:#06160d}.project{padding:12px;border:1px solid var(--line);border-radius:14px;background:#0b1324;margin-bottom:9px;cursor:pointer}.project.active{border-color:#8f7dff;background:#1a2542}.project b{display:block;margin-bottom:4px}.small{font-size:12px;color:var(--muted);line-height:1.5}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.log{white-space:pre-wrap;background:#060b16;border:1px solid var(--line);border-radius:14px;padding:12px;min-height:120px;color:#dce6ff;margin-top:12px}.hint{padding:12px;border-radius:14px;background:#0b1324;border:1px solid var(--line);margin-bottom:12px}@media(max-width:900px){.grid{grid-template-columns:1fr}}
+:root{--bg:#070a12;--card:#111827;--line:#2f3d5a;--text:#f5f7ff;--muted:#9caac4;--accent:#7b5cff;--good:#42d392;--warn:#ffd166;--bad:#ff6b6b}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#070a12,#0e1629);color:var(--text);font-family:Segoe UI,Malgun Gothic,Apple SD Gothic Neo,sans-serif}.app{max-width:1180px;margin:0 auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.brand{font-size:28px;font-weight:900}.badge{padding:8px 12px;border-radius:999px;background:#172139;border:1px solid var(--line);color:#d9e2ff}.grid{display:grid;grid-template-columns:320px 1fr;gap:16px}.card{background:#111827;border:1px solid var(--line);border-radius:22px;overflow:hidden;box-shadow:0 22px 70px #0008}.head{padding:15px 18px;background:#172139;border-bottom:1px solid var(--line);font-weight:900}.body{padding:18px}input,textarea{width:100%;background:#080f1f;color:var(--text);border:1px solid #34455f;border-radius:14px;padding:12px;outline:none}textarea{min-height:420px;line-height:1.6;resize:vertical}label{display:block;margin:12px 0 6px;color:var(--muted);font-size:13px}button{border:0;border-radius:14px;padding:13px 14px;font-weight:850;cursor:pointer;background:#283754;color:#eef3ff}.primary{background:linear-gradient(135deg,#6c54ff,#9b78ff)}.good{background:linear-gradient(135deg,#2fd084,#80eab5);color:#06160d}.project{padding:12px;border:1px solid var(--line);border-radius:14px;background:#0b1324;margin-bottom:9px;cursor:pointer}.project.active{border-color:#8f7dff;background:#1a2542}.project b{display:block;margin-bottom:4px}.small{font-size:12px;color:var(--muted);line-height:1.5}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.log{white-space:pre-wrap;background:#060b16;border:1px solid var(--line);border-radius:14px;padding:12px;min-height:150px;color:#dce6ff;margin-top:12px}.hint{padding:12px;border-radius:14px;background:#0b1324;border:1px solid var(--line);margin-bottom:12px}.debug{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}.debug button{padding:10px;font-size:12px}@media(max-width:900px){.grid{grid-template-columns:1fr}.debug{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="app">
-  <div class="top"><div class="brand">magicStudio</div><div class="badge" id="status">Step 1: 프로젝트/원고</div></div>
+  <div class="top"><div class="brand">magicStudio</div><div class="badge" id="statusBadge">Step 1: 프로젝트/원고</div></div>
   <div class="grid">
     <section class="card">
       <div class="head">기존 프로젝트</div>
       <div class="body">
-        <button onclick="loadProjects()">프로젝트 목록 새로고침</button>
+        <button id="btnRefreshProjects" type="button">프로젝트 목록 새로고침</button>
         <div class="small" style="margin:10px 0">기존 작업을 이어가려면 아래 프로젝트를 선택하세요.</div>
         <div id="projects"></div>
       </div>
@@ -64,24 +64,138 @@ HTML = '''<!doctype html>
         <label>프로젝트명</label><input id="title" value="불법강호">
         <label>한 줄 아이디어</label><input id="idea" value="현대 서울에 깨어난 백 년 전 무인이 국가등록무림과 충돌하는 3분 시리즈">
         <label>원고</label><textarea id="scenario"></textarea>
-        <div class="actions"><button class="primary" onclick="saveProject()">프로젝트/원고 저장</button><button class="good" onclick="loadProject()">현재 프로젝트 불러오기</button></div>
-        <div id="log" class="log"></div>
+        <div class="actions"><button id="btnSave" class="primary" type="button">프로젝트/원고 저장</button><button id="btnLoad" class="good" type="button">현재 프로젝트 불러오기</button></div>
+        <div class="debug"><button id="btnPing" type="button">서버 연결 확인</button><button id="btnShowPath" type="button">저장 경로 확인</button><button id="btnClearLog" type="button">로그 지우기</button></div>
+        <div id="logBox" class="log"></div>
       </div>
     </section>
   </div>
 </div>
 <script>
-const DEFAULT_SCENARIO = `__SCENARIO__`;
-scenario.value = DEFAULT_SCENARIO;
-function logMsg(s){log.textContent += (log.textContent?'\n':'') + '['+new Date().toLocaleTimeString()+'] ' + s; log.scrollTop=log.scrollHeight;}
-function esc(s){return String(s||'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]))}
-async function api(path,data){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json; charset=utf-8'},body:JSON.stringify(data||{})});const j=await r.json();if(!j.ok)throw new Error(j.error||'실패');return j;}
-async function getJson(path){const r=await fetch(path);return await r.json();}
-function payload(){return{title:title.value.trim()||'새프로젝트',idea:idea.value.trim(),scenario:scenario.value};}
-async function saveProject(){try{status.textContent='저장 중...';const j=await api('/api/save',payload());logMsg('저장 완료: '+j.path);status.textContent='저장 완료';await loadProjects();}catch(e){status.textContent='오류';logMsg(e.message)}}
-async function loadProject(){try{status.textContent='불러오는 중...';const j=await getJson('/api/project?title='+encodeURIComponent(title.value.trim()||'새프로젝트'));if(j.idea)idea.value=j.idea;if(j.scenario)scenario.value=j.scenario;logMsg('불러오기 완료: '+j.title);status.textContent='불러오기 완료';}catch(e){status.textContent='오류';logMsg(e.message)}}
-async function loadProjects(){const j=await getJson('/api/projects');projects.innerHTML='';(j.projects||[]).forEach(p=>{const d=document.createElement('div');d.className='project'+(p.title===title.value?' active':'');d.innerHTML='<b>'+esc(p.title)+'</b><div class="small">'+esc(p.path)+'</div>';d.onclick=async()=>{title.value=p.title;await loadProject();await loadProjects();};projects.appendChild(d);});}
-loadProjects().then(loadProject).catch(e=>logMsg(e.message));
+(function(){
+  'use strict';
+  const DEFAULT_SCENARIO = `__SCENARIO__`;
+  function el(id){ return document.getElementById(id); }
+  function setStatus(text){ el('statusBadge').textContent = text; }
+  function logMsg(text){
+    const box = el('logBox');
+    box.textContent += (box.textContent ? '\n' : '') + '[' + new Date().toLocaleTimeString() + '] ' + text;
+    box.scrollTop = box.scrollHeight;
+  }
+  function esc(text){ return String(text || '').replace(/[&<>]/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m]; }); }
+  function payload(){
+    return {
+      title: el('title').value.trim() || '새프로젝트',
+      idea: el('idea').value.trim(),
+      scenario: el('scenario').value
+    };
+  }
+  async function postJson(path, data){
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json; charset=utf-8'},
+      body: JSON.stringify(data || {})
+    });
+    const text = await response.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch(e) { throw new Error('JSON 응답 파싱 실패: ' + text.slice(0, 200)); }
+    if(!response.ok || !json.ok){ throw new Error(json.error || ('HTTP ' + response.status)); }
+    return json;
+  }
+  async function getJson(path){
+    const response = await fetch(path, {method:'GET'});
+    const text = await response.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch(e) { throw new Error('JSON 응답 파싱 실패: ' + text.slice(0, 200)); }
+    if(!response.ok || json.ok === false){ throw new Error(json.error || ('HTTP ' + response.status)); }
+    return json;
+  }
+  async function saveProject(){
+    try{
+      setStatus('저장 중...');
+      logMsg('저장 요청: ' + payload().title);
+      const result = await postJson('/api/save', payload());
+      logMsg('저장 완료: ' + result.path);
+      logMsg('프로젝트 폴더: ' + result.project_root);
+      setStatus('저장 완료');
+      await loadProjects();
+    }catch(e){
+      setStatus('저장 오류');
+      logMsg('저장 실패: ' + e.message);
+    }
+  }
+  async function loadProject(){
+    try{
+      setStatus('불러오는 중...');
+      const name = el('title').value.trim() || '새프로젝트';
+      logMsg('불러오기 요청: ' + name);
+      const result = await getJson('/api/project?title=' + encodeURIComponent(name));
+      if(result.idea !== undefined){ el('idea').value = result.idea; }
+      if(result.scenario !== undefined){ el('scenario').value = result.scenario; }
+      logMsg('불러오기 완료: ' + result.title);
+      logMsg('원고 길이: ' + String((result.scenario || '').length) + '자');
+      setStatus('불러오기 완료');
+    }catch(e){
+      setStatus('불러오기 오류');
+      logMsg('불러오기 실패: ' + e.message);
+    }
+  }
+  async function loadProjects(){
+    try{
+      const result = await getJson('/api/projects');
+      const box = el('projects');
+      box.innerHTML = '';
+      const current = el('title').value.trim();
+      if(!result.projects || result.projects.length === 0){
+        box.innerHTML = '<div class="small">아직 저장된 프로젝트가 없습니다.</div>';
+        return;
+      }
+      result.projects.forEach(function(p){
+        const div = document.createElement('div');
+        div.className = 'project' + (p.title === current ? ' active' : '');
+        div.innerHTML = '<b>' + esc(p.title) + '</b><div class="small">' + esc(p.path) + '</div>';
+        div.addEventListener('click', async function(){
+          el('title').value = p.title;
+          await loadProject();
+          await loadProjects();
+        });
+        box.appendChild(div);
+      });
+      logMsg('프로젝트 목록 로드: ' + result.projects.length + '개');
+    }catch(e){
+      logMsg('프로젝트 목록 실패: ' + e.message);
+    }
+  }
+  async function ping(){
+    try{
+      const result = await getJson('/api/ping');
+      logMsg('서버 연결 OK: ' + result.workspace);
+      setStatus('서버 연결 OK');
+    }catch(e){ logMsg('서버 연결 실패: ' + e.message); }
+  }
+  async function showPath(){
+    try{
+      const result = await getJson('/api/path?title=' + encodeURIComponent(payload().title));
+      logMsg('project_root: ' + result.project_root);
+      logMsg('scenario_path: ' + result.scenario_path);
+    }catch(e){ logMsg('경로 확인 실패: ' + e.message); }
+  }
+  function bind(){
+    el('scenario').value = DEFAULT_SCENARIO;
+    el('btnSave').addEventListener('click', saveProject);
+    el('btnLoad').addEventListener('click', loadProject);
+    el('btnRefreshProjects').addEventListener('click', loadProjects);
+    el('btnPing').addEventListener('click', ping);
+    el('btnShowPath').addEventListener('click', showPath);
+    el('btnClearLog').addEventListener('click', function(){ el('logBox').textContent = ''; });
+  }
+  document.addEventListener('DOMContentLoaded', async function(){
+    bind();
+    logMsg('화면 준비 완료');
+    await ping();
+    await loadProjects();
+  });
+})();
 </script>
 </body>
 </html>'''.replace('__SCENARIO__', DEFAULT_SCENARIO.replace('`', '\\`'))
@@ -118,11 +232,19 @@ def write_json(path: Path, payload: Dict[str, Any]) -> None:
 
 
 def project_root(workspace: Path, title: str) -> Path:
-    return workspace / "local_projects" / title
+    return workspace / "local_projects" / safe_project_name(title)
 
 
 def episode_dir(workspace: Path, title: str) -> Path:
     return project_root(workspace, title) / "episodes" / "ep001"
+
+
+def safe_project_name(title: str) -> str:
+    value = title.strip() or DEFAULT_TITLE
+    bad_chars = '<>:"/\\|?*'
+    for ch in bad_chars:
+        value = value.replace(ch, '_')
+    return value
 
 
 def save_project(workspace: Path, title: str, idea: str, scenario: str) -> Dict[str, Any]:
@@ -133,7 +255,11 @@ def save_project(workspace: Path, title: str, idea: str, scenario: str) -> Dict[
     write_json(root / "project.json", {"title": title, "idea": idea, "status": "draft"})
     write_json(ep / "web_meta.json", {"title": title, "idea": idea, "scenario_path": str(ep / "scenario.md")})
     write_text_utf8(ep / "scenario.md", scenario)
-    return {"path": str(ep / "scenario.md")}
+    return {
+        "path": str(ep / "scenario.md"),
+        "project_root": str(root),
+        "scenario_path": str(ep / "scenario.md"),
+    }
 
 
 def load_project(workspace: Path, title: str) -> Dict[str, Any]:
@@ -144,7 +270,16 @@ def load_project(workspace: Path, title: str) -> Dict[str, Any]:
     scenario = read_text_smart(ep / "scenario.md")
     if not scenario:
         scenario = DEFAULT_SCENARIO
-    return {"ok": True, "title": title, "idea": meta.get("idea") or project.get("idea", DEFAULT_IDEA), "scenario": scenario, "project": project}
+    return {
+        "ok": True,
+        "title": title,
+        "idea": meta.get("idea") or project.get("idea", DEFAULT_IDEA),
+        "scenario": scenario,
+        "project": project,
+        "project_root": str(root),
+        "scenario_path": str(ep / "scenario.md"),
+        "exists": root.exists(),
+    }
 
 
 def list_projects(workspace: Path) -> List[Dict[str, str]]:
@@ -154,7 +289,9 @@ def list_projects(workspace: Path) -> List[Dict[str, str]]:
         return rows
     for item in sorted(root.iterdir(), key=lambda p: p.name):
         if item.is_dir():
-            rows.append({"title": item.name, "path": str(item)})
+            project = read_json(item / "project.json")
+            display_title = str(project.get("title", item.name))
+            rows.append({"title": display_title, "path": str(item)})
     return rows
 
 
@@ -181,18 +318,28 @@ class Handler(BaseHTTPRequestHandler):
         size = int(self.headers.get("Content-Length", "0") or "0")
         if size <= 0:
             return {}
-        return json.loads(self.rfile.read(size).decode("utf-8"))
+        raw = self.rfile.read(size).decode("utf-8")
+        return json.loads(raw) if raw else {}
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/":
                 self.send_html()
+            elif parsed.path == "/api/ping":
+                self.send_json({"ok": True, "workspace": str(self.workspace)})
             elif parsed.path == "/api/projects":
                 self.send_json({"ok": True, "projects": list_projects(self.workspace)})
             elif parsed.path == "/api/project":
                 title = parse_qs(parsed.query).get("title", [DEFAULT_TITLE])[0]
                 self.send_json(load_project(self.workspace, title))
+            elif parsed.path == "/api/path":
+                title = parse_qs(parsed.query).get("title", [DEFAULT_TITLE])[0]
+                self.send_json({
+                    "ok": True,
+                    "project_root": str(project_root(self.workspace, title)),
+                    "scenario_path": str(episode_dir(self.workspace, title) / "scenario.md"),
+                })
             else:
                 self.send_json({"ok": False, "error": "not found"}, 404)
         except Exception as exc:
