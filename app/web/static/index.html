@@ -11,7 +11,7 @@
     <header class="topbar">
       <div>
         <div class="brand">magicStudio</div>
-        <div class="subtitle">프로젝트 → 원고/회차 → 프롬프트 → 이미지·음성 → 동영상 → 검수</div>
+        <div class="subtitle">프로젝트 → 회차 → 프롬프트 → 이미지·음성 → 동영상 → 검수</div>
       </div>
       <div class="top-actions">
         <span id="serverState" class="pill">서버 확인 중</span>
@@ -24,7 +24,7 @@
         <input id="projectTitle" type="text" placeholder="프로젝트명" />
         <input id="projectIdea" type="text" placeholder="한 줄 아이디어" />
       </div>
-      <textarea id="masterCommand" class="master-command" placeholder="예: 이 원고로 1분짜리 쇼츠 프리뷰를 만들고, 한국어 TTS와 자막을 넣어줘."></textarea>
+      <textarea id="masterCommand" class="master-command" placeholder="예: 선택 회차로 1분짜리 쇼츠 프리뷰를 만들고, 한국어 TTS와 자막을 넣어줘."></textarea>
       <div class="main-actions">
         <button id="btnMakeAll" class="btn primary">전체 자동 제작</button>
         <button id="btnSave" class="btn">현재 회차 저장</button>
@@ -35,7 +35,7 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="project">1 프로젝트</button>
-      <button class="tab" data-tab="scenario">2 원고/회차</button>
+      <button class="tab" data-tab="scenario">2 회차 CRUD</button>
       <button class="tab" data-tab="prompt">3 프롬프트</button>
       <button class="tab" data-tab="media">4 이미지·음성</button>
       <button class="tab" data-tab="video">5 동영상</button>
@@ -56,45 +56,26 @@
         </div>
 
         <div id="stage-scenario" class="stage">
-          <h2>원고/회차 관리</h2>
-          <p class="muted">장편 전체 원고는 manuscript에 보관하고, 영상 제작은 선택한 회차 원고를 기준으로 진행합니다.</p>
-          <div class="scenario-layout">
-            <section class="scenario-column">
-              <div class="subhead">전체 원고</div>
-              <textarea id="manuscriptText" class="manuscript-text" placeholder="장편 전체 원고를 여기에 붙여넣거나 저장된 전체 원고를 불러옵니다."></textarea>
-              <div class="stage-actions">
-                <button id="btnSaveManuscript" class="btn primary">전체 원고 저장</button>
-                <button id="btnLoadManuscript" class="btn">전체 원고 불러오기</button>
-                <button id="btnSplitManuscript" class="btn">원고 자동 분할</button>
-              </div>
-              <div class="split-options">
-                <label>분할 기준 글자 수</label>
-                <input id="targetChars" type="number" value="2500" min="800" step="100" />
-              </div>
-            </section>
-
-            <section class="scenario-column narrow">
-              <div class="subhead">조각 / 회차</div>
-              <div class="mini-title">원고 조각</div>
-              <div id="chunkList" class="mini-list"></div>
-              <div class="episode-create-row">
-                <input id="newEpisodeId" type="text" value="ep001" />
-                <button id="btnCreateEpisodeFromChunk" class="btn primary">선택 조각 → 회차</button>
-              </div>
-              <div class="mini-title">회차 목록</div>
+          <h2>회차 CRUD</h2>
+          <p class="muted">회차는 사람이 명확하게 나눕니다. 회차 ID를 정하고 원고를 붙여넣어 저장한 뒤, 그 회차를 기준으로 장면/프롬프트를 생성합니다.</p>
+          <div class="episode-crud-layout">
+            <section class="episode-list-panel">
+              <div class="subhead">회차 목록</div>
               <div id="episodeList" class="mini-list"></div>
             </section>
 
-            <section class="scenario-column">
+            <section class="episode-editor-panel">
               <div class="subhead">선택 회차 원고</div>
-              <div class="episode-row">
-                <input id="episodeId" type="text" value="ep001" />
-                <button id="btnLoadEpisode" class="btn">회차 불러오기</button>
+              <div class="episode-toolbar">
+                <input id="episodeId" type="text" value="ep001" placeholder="ep001" />
+                <button id="btnNewEpisode" class="btn">새 회차</button>
+                <button id="btnLoadEpisode" class="btn">불러오기</button>
+                <button id="btnSaveEpisode" class="btn primary">저장</button>
+                <button id="btnDeleteEpisode" class="btn danger">삭제</button>
               </div>
-              <textarea id="scenarioText" class="scenario-text"></textarea>
+              <textarea id="scenarioText" class="scenario-text" placeholder="이곳에 선택 회차 원고를 붙여넣으세요."></textarea>
               <div class="stage-actions">
-                <button id="btnSaveEpisode" class="btn">회차 저장</button>
-                <button id="btnBuildScenes" class="btn primary">장면/프롬프트 생성</button>
+                <button id="btnBuildScenes" class="btn primary">이 회차로 장면/프롬프트 생성</button>
               </div>
             </section>
           </div>
