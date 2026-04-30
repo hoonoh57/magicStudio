@@ -180,11 +180,13 @@ class FfmpegPreviewRenderer:
             "-f",
             "lavfi",
             "-i",
-            f"color=c=black:s={resolution}:r={fps}:d={duration}",
+            f"color=c=#101018:s={resolution}:r={fps}:d={duration}",
             "-f",
             "lavfi",
             "-i",
             "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-vf",
+            "drawbox=x=0:y=0:w=iw:h=ih:color=#2f80ed@0.40:t=36,drawbox=x=iw*0.08:y=ih*0.18:w=iw*0.84:h=ih*0.64:color=#ffffff@0.16:t=8",
             "-shortest",
             "-c:v",
             "libx264",
@@ -236,13 +238,17 @@ class FfmpegPreviewRenderer:
         title: str,
         focus: str,
         shot_type: str,
+        color: str,
     ) -> List[str]:
-        text = self._placeholder_text(title, focus, shot_type)
-        draw_text = self._escape_drawtext(text)
+        # Keep this filter text-free so preview cards are visible even when FFmpeg
+        # lacks fonts that support Korean glyphs. Scene text remains available in
+        # preview.srt and preview_scene_manifest.json.
         filter_text = (
             f"color=c=#101018:s={resolution}:d=1,"
-            f"drawtext=text='{draw_text}':fontcolor=white:fontsize=44:"
-            f"x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.45:boxborderw=24"
+            f"drawbox=x=0:y=0:w=iw:h=ih:color={color}@0.42:t=48,"
+            f"drawbox=x=iw*0.08:y=ih*0.16:w=iw*0.84:h=ih*0.68:color=#ffffff@0.16:t=10,"
+            f"drawbox=x=iw*0.12:y=ih*0.22:w=iw*0.76:h=ih*0.08:color={color}@0.70:t=fill,"
+            f"drawbox=x=iw*0.12:y=ih*0.70:w=iw*0.76:h=ih*0.04:color={color}@0.50:t=fill"
         )
         return [
             self.ffmpeg_path,
@@ -279,6 +285,7 @@ class FfmpegPreviewRenderer:
 
     def _generate_placeholder_keyframes(self, episode_dir: Path, plan: Dict[str, Any], resolution: str) -> int:
         count = 0
+        slot_counter = 0
         for scene in plan.get("scenes", []):
             title = str(scene.get("title", ""))
             for slot in scene.get("image_slots", []):
@@ -286,18 +293,21 @@ class FfmpegPreviewRenderer:
                 if not rel_path:
                     continue
                 output_path = episode_dir / rel_path
-                if output_path.exists():
+                if output_path.exists() and output_path.stat().st_size > 0:
                     continue
                 output_path.parent.mkdir(parents=True, exist_ok=True)
+                color = self._placeholder_color(slot_counter)
+                slot_counter += 1
                 command = self._build_placeholder_image_command(
                     output_path=output_path,
                     resolution=resolution,
                     title=title,
                     focus=str(slot.get("visual_focus", "")),
                     shot_type=str(slot.get("shot_type", "keyframe")),
+                    color=color,
                 )
                 completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
-                if completed.returncode == 0 and output_path.exists():
+                if completed.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0:
                     count += 1
         return count
 
@@ -334,17 +344,19 @@ class FfmpegPreviewRenderer:
             )
         output_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def _placeholder_text(self, title: str, focus: str, shot_type: str) -> str:
-        merged = f"{title}\n{shot_type}\n{focus}".strip()
-        merged = " ".join(merged.split())
-        if len(merged) > 160:
-            merged = merged[:157] + "..."
-        return merged
-
-    def _escape_drawtext(self, text: str) -> str:
-        escaped = text.replace("\\", "\\\\")
-        escaped = escaped.replace(":", "\\:")
-        escaped = escaped.replace("'", "\\'")
-        escaped = escaped.replace("%", "\\%")
-        escaped = escaped.replace("\n", "\\n")
-        return escaped
+    def _placeholder_color(self, index: int) -> str:
+        colors = [
+            "#2f80ed",
+            "#9b51e0",
+            "#eb5757",
+            "#27ae60",
+            "#f2994a",
+            "#56ccf2",
+            "#bb6bd9",
+            "#219653",
+            "#f2c94c",
+            "#2d9cdb",
+            "#6fcf97",
+            "#f26b6b",
+        ]
+        return colors[index % len(colors)]
