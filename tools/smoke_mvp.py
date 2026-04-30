@@ -10,6 +10,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from app.core.bible_builder import BibleBuilder
 from app.core.idea_analyzer import IdeaAnalyzer
+from app.core.production_planner import ProductionPlanner
 from app.core.project_manager import ProjectManager
 from app.core.scenario_manager import ScenarioManager
 from app.core.scene_breaker import SceneBreaker
@@ -80,6 +81,8 @@ def main() -> int:
     srt_path = episode_dir / "captions.srt"
     SrtExporter().export_file(timeline, srt_path)
 
+    production_files = ProductionPlanner().save_all(vml_episode, timeline, episode_dir)
+
     print("=== magicStudio MVP Smoke Pipeline ===")
     print(f"project_id: {project.project_id}")
     print(f"project_root: {project.root_path}")
@@ -88,6 +91,8 @@ def main() -> int:
     print(f"vml_scenes: {vml_path}")
     print(f"timeline: {timeline_path}")
     print(f"captions: {srt_path}")
+    for name, path in production_files.items():
+        print(f"{name}: {path}")
     print(f"scene_count: {len(scenes)}")
     print(f"duration_sec: {timeline.get('duration_sec')}")
     return 0
