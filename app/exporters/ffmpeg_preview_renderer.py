@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -17,7 +18,7 @@ class FfmpegPreviewRenderer:
     """
 
     def __init__(self, ffmpeg_path: str = "ffmpeg") -> None:
-        self.ffmpeg_path = ffmpeg_path
+        self.ffmpeg_path = self._resolve_ffmpeg(ffmpeg_path)
 
     def render_from_file(self, episode_dir: Path | str, plan_file: str = "preview_render_plan.json") -> Dict[str, Any]:
         root = Path(episode_dir)
@@ -68,6 +69,7 @@ class FfmpegPreviewRenderer:
             "output_path": str(output_path),
             "captions_sidecar": str(captions_sidecar) if captions_source.exists() else "",
             "scene_manifest": str(scene_manifest_path),
+            "ffmpeg_path": self.ffmpeg_path,
             "mode": "fallback_black_video_with_sidecar_srt",
         }
         (preview_dir / "preview_render_result.json").write_text(
@@ -77,6 +79,50 @@ class FfmpegPreviewRenderer:
         if completed.returncode != 0:
             raise RuntimeError(f"ffmpeg preview render failed: {completed.stderr}")
         return result
+
+    def _resolve_ffmpeg(self, ffmpeg_path: str) -> str:
+        explicit = ffmpeg_path.strip().strip('"')
+        if explicit and explicit.lower() != "ffmpeg":
+            path = Path(explicit)
+            if path.exists():
+                return str(path)
+            found = shutil.which(explicit)
+            if found:
+                return found
+            return explicit
+
+        env_path = os.environ.get("FFMPEG_PATH", "").strip().strip('"')
+        if env_path:
+            path = Path(env_path)
+            if path.exists():
+                return str(path)
+
+        found = shutil.which("ffmpeg")
+        if found:
+            return found
+
+        candidates = self._candidate_ffmpeg_paths()
+        for candidate in candidates:
+            if candidate.exists():
+                return str(candidate)
+        return explicit or "ffmpeg"
+
+    def _candidate_ffmpeg_paths(self) -> List[Path]:
+        cwd = Path.cwd()
+        home = Path.home()
+        candidates = [
+            cwd / "tools" / "ffmpeg" / "bin" / "ffmpeg.exe",
+            cwd / "ffmpeg" / "bin" / "ffmpeg.exe",
+            cwd / "bin" / "ffmpeg.exe",
+            Path("C:/ffmpeg/bin/ffmpeg.exe"),
+            Path("C:/ProgramData/chocolatey/bin/ffmpeg.exe"),
+            home / "scoop" / "shims" / "ffmpeg.exe",
+            home / "AppData" / "Local" / "Microsoft" / "WinGet" / "Links" / "ffmpeg.exe",
+        ]
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        if local_app_data:
+            candidates.append(Path(local_app_data) / "Microsoft" / "WinGet" / "Links" / "ffmpeg.exe")
+        return candidates
 
     def _ensure_ffmpeg(self) -> None:
         try:
@@ -88,7 +134,14 @@ class FfmpegPreviewRenderer:
                 errors="replace",
             )
         except FileNotFoundError as exc:
-            raise FileNotFoundError("ffmpeg executable not found. Add ffmpeg to PATH or pass --ffmpeg.") from exc
+            searched = [str(path) for path in self._candidate_ffmpeg_paths()]
+            message = (
+                "ffmpeg executable not found. "
+                "Install FFmpeg, set FFMPEG_PATH, put ffmpeg.exe under tools/ffmpeg/bin, "
+                "or pass --ffmpeg C:\\path\\to\\ffmpeg.exe. "
+                f"Resolved value: {self.ffmpeg_path}. Searched: {searched}"
+            )
+            raise FileNotFoundError(message) from exc
         if completed.returncode != 0:
             raise RuntimeError(f"ffmpeg check failed: {completed.stderr}")
 
