@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -94,37 +95,52 @@ class VmlEngine:
         ]
 
     def _narration_from_source(self, scene: Scene) -> str:
-        text = " ".join(scene.source_text.split())
+        text = self._normalize_text(scene.source_text)
         if not text:
             return f"{scene.title}."
+
         sentences = self._split_sentences(text)
+        if not sentences:
+            return text
+
         if scene.dramatic_function == "hook_opening":
             return self._join_sentences(sentences[:2])
         if scene.dramatic_function == "next_episode_hook":
-            return self._join_sentences(sentences[-2:])
-        if len(sentences) <= 2:
             return self._join_sentences(sentences)
-        return self._join_sentences([sentences[0], sentences[-1]])
+        if len(sentences) <= 3:
+            return self._join_sentences(sentences)
+        return self._join_sentences([sentences[0], sentences[1], sentences[-1]])
+
+    def _normalize_text(self, text: str) -> str:
+        normalized = " ".join(text.split())
+        normalized = re.sub(r"\s+([.,!?。！？])", r"\1", normalized)
+        normalized = re.sub(r"([.,!?。！？])([^\s])", r"\1 \2", normalized)
+        return normalized.strip()
 
     def _split_sentences(self, text: str) -> List[str]:
+        normalized = self._normalize_text(text)
+        if not normalized:
+            return []
+
         sentences: List[str] = []
-        current: List[str] = []
-        for ch in text:
-            current.append(ch)
-            if ch in ".?!。！？다요오까":
-                sentence = "".join(current).strip()
-                if sentence:
-                    sentences.append(sentence)
-                current = []
-        if current:
-            tail = "".join(current).strip()
-            if tail:
-                sentences.append(tail)
-        return sentences or [text]
+        start = 0
+        for match in re.finditer(r"[.!?。！？]", normalized):
+            end = match.end()
+            sentence = normalized[start:end].strip()
+            if sentence:
+                sentences.append(sentence)
+            start = end
+            while start < len(normalized) and normalized[start].isspace():
+                start += 1
+
+        tail = normalized[start:].strip()
+        if tail:
+            sentences.append(tail)
+        return sentences
 
     def _join_sentences(self, sentences: List[str]) -> str:
         text = " ".join(sentence.strip() for sentence in sentences if sentence.strip())
-        return text.strip()
+        return self._normalize_text(text)
 
     def _location_hint(self, scene: Scene) -> str:
         if "서울역" in scene.title or "전광판" in scene.title:
@@ -171,11 +187,11 @@ class VmlEngine:
         ]
 
     def _first_phrase(self, text: str) -> str:
-        normalized = " ".join(text.split())
-        return normalized[:80]
+        normalized = self._normalize_text(text)
+        return normalized[:100]
 
     def _last_phrase(self, text: str) -> str:
-        normalized = " ".join(text.split())
-        if len(normalized) <= 80:
+        normalized = self._normalize_text(text)
+        if len(normalized) <= 100:
             return normalized
-        return normalized[-80:]
+        return normalized[-100:]
