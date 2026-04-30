@@ -28,6 +28,8 @@ def powershell_executable() -> str:
 
 def list_voices() -> int:
     script = r'''
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Speech
 $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
 foreach ($voice in $synth.GetInstalledVoices()) {
@@ -52,6 +54,10 @@ $synth.Dispose()
         return completed.returncode
 
 
+def ps_single_quote(text: str) -> str:
+    return text.replace("'", "''")
+
+
 def synthesize_one(
     text: str,
     output_path: Path,
@@ -59,29 +65,46 @@ def synthesize_one(
     rate: int,
     volume: int,
 ) -> Dict[str, Any]:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    absolute_output_path = output_path.resolve()
+    absolute_output_path.parent.mkdir(parents=True, exist_ok=True)
+    if absolute_output_path.exists() and absolute_output_path.stat().st_size == 0:
+        absolute_output_path.unlink()
+
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
         text_path = temp_root / "tts_text.txt"
         script_path = temp_root / "synth.ps1"
         write_text(text_path, text)
-        escaped_voice = voice.replace("'", "''")
-        escaped_text_path = str(text_path).replace("'", "''")
-        escaped_output_path = str(output_path).replace("'", "''")
+        escaped_voice = ps_single_quote(voice)
+        escaped_text_path = ps_single_quote(str(text_path.resolve()))
+        escaped_output_path = ps_single_quote(str(absolute_output_path))
         script = f'''
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Speech
 $text = Get-Content -LiteralPath '{escaped_text_path}' -Raw -Encoding UTF8
-$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
-if ('{escaped_voice}'.Length -gt 0) {{
-  $synth.SelectVoice('{escaped_voice}')
+$outDir = Split-Path -Parent '{escaped_output_path}'
+if (!(Test-Path -LiteralPath $outDir)) {{
+  New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 }}
-$synth.Rate = {rate}
-$synth.Volume = {volume}
-$format = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(48000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
-$synth.SetOutputToWaveFile('{escaped_output_path}', $format)
-$synth.Speak($text)
-$synth.Dispose()
+if (Test-Path -LiteralPath '{escaped_output_path}') {{
+  Remove-Item -LiteralPath '{escaped_output_path}' -Force
+}}
+$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
+try {{
+  if ('{escaped_voice}'.Length -gt 0) {{
+    $synth.SelectVoice('{escaped_voice}')
+  }}
+  $synth.Rate = {rate}
+  $synth.Volume = {volume}
+  $format = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(48000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
+  $synth.SetOutputToWaveFile('{escaped_output_path}', $format)
+  $synth.Speak($text)
+  $synth.SetOutputToNull()
+}} finally {{
+  $synth.Dispose()
+}}
 '''
         write_text(script_path, script)
         completed = subprocess.run(
@@ -92,12 +115,13 @@ $synth.Dispose()
             errors="replace",
         )
         return {
-            "ok": completed.returncode == 0 and output_path.exists() and output_path.stat().st_size > 0,
+            "ok": completed.returncode == 0 and absolute_output_path.exists() and absolute_output_path.stat().st_size > 0,
             "returncode": completed.returncode,
             "stdout": completed.stdout,
             "stderr": completed.stderr,
             "output_path": str(output_path),
-            "size_bytes": output_path.stat().st_size if output_path.exists() else 0,
+            "absolute_output_path": str(absolute_output_path),
+            "size_bytes": absolute_output_path.stat().st_size if absolute_output_path.exists() else 0,
         }
 
 
@@ -107,12 +131,14 @@ def synthesize_episode(
     rate: int,
     volume: int,
 ) -> Dict[str, Any]:
-    tts_path = episode_dir / "tts_script.json"
+    absolute_episode_dir = episode_dir.resolve()
+    tts_path = absolute_episode_dir / "tts_script.json"
     if not tts_path.exists():
         raise FileNotFoundError(f"tts_script.json not found: {tts_path}")
 
     payload = read_json(tts_path)
-    audio_dir = episode_dir / "audio"
+    audio_dir = absolute_episode_dir / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
     results: List[Dict[str, Any]] = []
     ok_count = 0
 
@@ -133,6 +159,7 @@ def synthesize_episode(
     summary = {
         "ok": ok_count == len(results) and len(results) > 0,
         "episode_dir": str(episode_dir),
+        "absolute_episode_dir": str(absolute_episode_dir),
         "audio_dir": str(audio_dir),
         "voice": voice,
         "rate": rate,
@@ -173,7 +200,7 @@ def main() -> int:
     print(f"ok_count: {summary['ok_count']} / {summary['total']}")
     for item in summary["results"]:
         status = "OK" if item["ok"] else "FAIL"
-        print(f"{status}: {item['scene_id']} -> {item['output_path']} ({item['size_bytes']} bytes)")
+        print(f"{status}: {item['scene_id']} -> {item['absolute_output_path']} ({item['size_bytes']} bytes)")
         if not item["ok"] and item.get("stderr"):
             print(item["stderr"], file=sys.stderr)
     return 0 if summary["ok"] else 1
