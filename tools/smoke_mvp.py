@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import json
+import sys
 from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from app.core.bible_builder import BibleBuilder
 from app.core.idea_analyzer import IdeaAnalyzer
@@ -65,7 +69,7 @@ def main() -> int:
         scenario_text=scenario_text,
     )
 
-    scenes = SceneBreaker().break_episode(episode, project.project_root if hasattr(project, "project_root") else project.root_path)
+    scenes = SceneBreaker().break_episode(episode, project.root_path)
     episode_dir = Path(project.root_path) / "episodes" / "ep001"
     vml_path = episode_dir / "vml_scenes.json"
     vml_episode = VmlEngine().generate_episode_vml(scenes, bible, vml_path)
