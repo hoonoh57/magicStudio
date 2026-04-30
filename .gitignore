@@ -16,6 +16,21 @@ Thumbs.db
 local_projects/
 user_projects/
 story_archive/
+
+# Local reusable production asset libraries
+# 동작, 포즈, 스프라이트, 캐릭터 참조, 장면 참조, 제작 워크스페이스는 로컬 전용 자산으로 관리한다.
+asset_library/
+assets_private/
+private_assets/
+motion_library/
+action_library/
+sprite_library/
+pose_library/
+reference_library/
+production_workspaces/
+production_outputs/
+
+# Per-project private source and production data
 projects/*/source/
 projects/*/scenario/
 projects/*/scenarios/
@@ -28,12 +43,18 @@ projects/*/assets/images/
 projects/*/assets/videos/
 projects/*/assets/audio/
 projects/*/assets/generated/
+projects/*/assets/motions/
+projects/*/assets/sprites/
+projects/*/assets/poses/
+projects/*/assets/references/
 projects/*/renders/
 projects/*/exports/
 
 # Allow safe templates/placeholders when needed
 !projects/.gitkeep
 !project_templates/**
+!genre_profiles/**
+!provider_profiles/**
 
 # Generated media / large binary outputs
 *.mp4
@@ -50,6 +71,7 @@ projects/*/exports/
 *.jpg
 *.jpeg
 *.webp
+*.gif
 *.psd
 *.kra
 *.tmp
