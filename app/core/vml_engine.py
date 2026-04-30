@@ -248,18 +248,20 @@ class VmlEngine:
         return cues
 
     def _keyframes(self, scene: Scene) -> List[Dict[str, Any]]:
+        sentences = self._split_sentences(scene.source_text)
         return [
-            {"keyframe_id": "start", "time_sec": 0, "description": f"{scene.title} 시작 이미지: {self._first_phrase(scene.source_text)}"},
-            {"keyframe_id": "mid", "time_sec": round(scene.duration_sec / 2.0, 1), "description": f"{scene.title} 중간 핵심 이미지"},
-            {"keyframe_id": "end", "time_sec": scene.duration_sec, "description": f"{scene.title} 종료 후킹 이미지: {self._last_phrase(scene.source_text)}"},
+            {"keyframe_id": "start", "time_sec": 0, "description": self._keyframe_sentence(scene.title, "시작 이미지", sentences, 0)},
+            {"keyframe_id": "mid", "time_sec": round(scene.duration_sec / 2.0, 1), "description": self._keyframe_sentence(scene.title, "중간 핵심 이미지", sentences, self._middle_index(sentences))},
+            {"keyframe_id": "end", "time_sec": scene.duration_sec, "description": self._keyframe_sentence(scene.title, "종료 후킹 이미지", sentences, len(sentences) - 1)},
         ]
 
-    def _first_phrase(self, text: str) -> str:
-        normalized = self._normalize_text(text)
-        return normalized[:100]
+    def _keyframe_sentence(self, title: str, label: str, sentences: List[str], index: int) -> str:
+        if not sentences:
+            return f"{title} {label}"
+        safe_index = max(0, min(index, len(sentences) - 1))
+        return f"{title} {label}: {sentences[safe_index]}"
 
-    def _last_phrase(self, text: str) -> str:
-        normalized = self._normalize_text(text)
-        if len(normalized) <= 100:
-            return normalized
-        return normalized[-100:]
+    def _middle_index(self, sentences: List[str]) -> int:
+        if not sentences:
+            return 0
+        return len(sentences) // 2
