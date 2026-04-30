@@ -106,6 +106,7 @@ class Scene:
     title: str
     dramatic_function: str
     duration_sec: float
+    source_text: str = ""
     vml_json: str = "{}"
     status: str = "DRAFT"
 
