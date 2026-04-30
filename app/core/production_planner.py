@@ -161,6 +161,7 @@ class ProductionPlanner:
                 "Review VML and narration quality_score.",
                 "Generate or register keyframe images from keyframe_prompts.json.",
                 "Generate or register TTS audio from tts_script.json.",
+                "Run preview render using preview_render_plan.json.",
                 "Open timeline.json in an editor/exporter pipeline.",
             ],
         }
@@ -171,17 +172,26 @@ class ProductionPlanner:
         timeline: Dict[str, Any],
         episode_dir: Path | str,
     ) -> Dict[str, Path]:
+        from app.core.preview_render_planner import PreviewRenderPlanner
+
         root = Path(episode_dir)
         keyframe_path = root / "keyframe_prompts.json"
         tts_path = root / "tts_script.json"
         music_path = root / "music_plan.json"
         sfx_path = root / "sfx_plan.json"
+        preview_path = root / "preview_render_plan.json"
         export_path = root / "export_package.json"
 
-        write_json_file(keyframe_path, self.build_keyframe_prompts(vml_episode))
-        write_json_file(tts_path, self.build_tts_script(vml_episode))
-        write_json_file(music_path, self.build_music_plan(vml_episode))
-        write_json_file(sfx_path, self.build_sfx_plan(vml_episode))
+        keyframe_prompts = self.build_keyframe_prompts(vml_episode)
+        tts_script = self.build_tts_script(vml_episode)
+        music_plan = self.build_music_plan(vml_episode)
+        sfx_plan = self.build_sfx_plan(vml_episode)
+
+        write_json_file(keyframe_path, keyframe_prompts)
+        write_json_file(tts_path, tts_script)
+        write_json_file(music_path, music_plan)
+        write_json_file(sfx_path, sfx_plan)
+        PreviewRenderPlanner().build_and_save(timeline, keyframe_prompts, tts_script, root)
 
         relative_files = {
             "vml": "vml_scenes.json",
@@ -191,6 +201,7 @@ class ProductionPlanner:
             "tts_script": "tts_script.json",
             "music_plan": "music_plan.json",
             "sfx_plan": "sfx_plan.json",
+            "preview_render_plan": "preview_render_plan.json",
         }
         write_json_file(export_path, self.build_export_package(vml_episode, timeline, relative_files))
         return {
@@ -198,6 +209,7 @@ class ProductionPlanner:
             "tts_script": tts_path,
             "music_plan": music_path,
             "sfx_plan": sfx_path,
+            "preview_render_plan": preview_path,
             "export_package": export_path,
         }
 
