@@ -10,9 +10,24 @@ from app.core.models import Scene, write_json_file
 class VmlEngine:
     """Convert key scenes into VML production commands."""
 
+    MOTIF_KEYWORDS: List[str] = [
+        "밥",
+        "법",
+        "사람",
+        "검",
+        "기운",
+        "봉인",
+        "광고",
+        "전광판",
+        "등록",
+        "관리",
+        "마지막",
+    ]
+
     def generate_scene_vml(self, scene: Scene, project_bible: Dict[str, Any]) -> Dict[str, Any]:
         motifs = project_bible.get("motifs", [])
         visual_style = project_bible.get("visual_style", {})
+        narration_text = self._narration_from_source(scene)
         vml: Dict[str, Any] = {
             "vml_version": "0.1",
             "scene_id": scene.scene_id,
@@ -39,8 +54,10 @@ class VmlEngine:
             "motion": self._motion_refs(scene),
             "dialogue": [],
             "narration": {
-                "text": self._narration_from_source(scene),
+                "text": narration_text,
                 "tts_ref": "narration",
+                "quality_score": self._narration_quality_score(scene, narration_text),
+                "preserved_keywords": self._preserved_keywords(narration_text),
             },
             "audio": {
                 "bgm": self._bgm_cue(scene),
@@ -56,6 +73,7 @@ class VmlEngine:
                 "장면 목적이 선명한지 확인",
                 "다음 장면과 연결되는 후킹 확인",
                 "작가 원고의 핵심 문장이 보존되었는지 확인",
+                "밥/법/검/봉인 등 모티프 문장이 누락되지 않았는지 확인",
             ],
         }
         return vml
@@ -104,12 +122,62 @@ class VmlEngine:
             return text
 
         if scene.dramatic_function == "hook_opening":
-            return self._join_sentences(sentences[:2])
+            return self._join_sentences(self._select_sentences(sentences, required_count=2))
         if scene.dramatic_function == "next_episode_hook":
-            return self._join_sentences(sentences)
-        if len(sentences) <= 3:
-            return self._join_sentences(sentences)
-        return self._join_sentences([sentences[0], sentences[1], sentences[-1]])
+            return self._join_sentences(self._select_sentences(sentences, required_count=3, prefer_all=True))
+        return self._join_sentences(self._select_sentences(sentences, required_count=3))
+
+    def _select_sentences(self, sentences: List[str], required_count: int, prefer_all: bool = False) -> List[str]:
+        if prefer_all and len(sentences) <= required_count + 1:
+            return sentences
+        if len(sentences) <= required_count:
+            return sentences
+
+        selected_indexes: List[int] = [0]
+        motif_indexes: List[int] = []
+        for index, sentence in enumerate(sentences):
+            if self._sentence_has_motif(sentence):
+                motif_indexes.append(index)
+
+        for index in motif_indexes:
+            if index not in selected_indexes:
+                selected_indexes.append(index)
+            if len(selected_indexes) >= required_count:
+                break
+
+        if len(selected_indexes) < required_count:
+            last_index = len(sentences) - 1
+            if last_index not in selected_indexes:
+                selected_indexes.append(last_index)
+
+        cursor = 1
+        while len(selected_indexes) < required_count and cursor < len(sentences):
+            if cursor not in selected_indexes:
+                selected_indexes.append(cursor)
+            cursor += 1
+
+        selected_indexes = sorted(selected_indexes[:required_count])
+        return [sentences[index] for index in selected_indexes]
+
+    def _sentence_has_motif(self, sentence: str) -> bool:
+        return any(keyword in sentence for keyword in self.MOTIF_KEYWORDS)
+
+    def _preserved_keywords(self, text: str) -> List[str]:
+        return [keyword for keyword in self.MOTIF_KEYWORDS if keyword in text]
+
+    def _narration_quality_score(self, scene: Scene, narration_text: str) -> float:
+        score = 60.0
+        source_keywords = [keyword for keyword in self.MOTIF_KEYWORDS if keyword in scene.source_text]
+        preserved_keywords = [keyword for keyword in source_keywords if keyword in narration_text]
+        if source_keywords:
+            score += 30.0 * (len(preserved_keywords) / len(source_keywords))
+        if narration_text and narration_text[-1] in ".?!。！？다요오까":
+            score += 5.0
+        if 25 <= len(narration_text) <= 160:
+            score += 5.0
+        if score > 100.0:
+            return 100.0
+        return round(score, 2)
 
     def _normalize_text(self, text: str) -> str:
         normalized = " ".join(text.split())
