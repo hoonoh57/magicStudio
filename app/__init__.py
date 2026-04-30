@@ -1,0 +1,1 @@
+"""magicStudio application package."""
