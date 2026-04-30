@@ -5,7 +5,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class FfmpegPreviewRenderer:
@@ -173,6 +173,20 @@ class FfmpegPreviewRenderer:
         if completed.returncode != 0:
             raise RuntimeError(f"ffmpeg check failed: {completed.stderr}")
 
+    def _parse_resolution(self, resolution: str) -> Tuple[int, int]:
+        value = resolution.lower().replace(" ", "")
+        if "x" not in value:
+            return 1920, 1080
+        parts = value.split("x", 1)
+        try:
+            width = int(parts[0])
+            height = int(parts[1])
+        except ValueError:
+            return 1920, 1080
+        if width <= 0 or height <= 0:
+            return 1920, 1080
+        return width, height
+
     def _build_fallback_command(self, output_path: Path, duration: float, resolution: str, fps: int) -> List[str]:
         return [
             self.ffmpeg_path,
@@ -200,9 +214,10 @@ class FfmpegPreviewRenderer:
         ]
 
     def _build_image_slide_command(self, concat_file: Path, output_path: Path, resolution: str, fps: int) -> List[str]:
+        width, height = self._parse_resolution(resolution)
         scale_pad = (
-            f"scale={resolution}:force_original_aspect_ratio=decrease,"
-            f"pad={resolution}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}"
+            f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}"
         )
         return [
             self.ffmpeg_path,
@@ -240,9 +255,6 @@ class FfmpegPreviewRenderer:
         shot_type: str,
         color: str,
     ) -> List[str]:
-        # Keep this filter text-free so preview cards are visible even when FFmpeg
-        # lacks fonts that support Korean glyphs. Scene text remains available in
-        # preview.srt and preview_scene_manifest.json.
         filter_text = (
             f"color=c=#101018:s={resolution}:d=1,"
             f"drawbox=x=0:y=0:w=iw:h=ih:color={color}@0.42:t=48,"
@@ -287,7 +299,6 @@ class FfmpegPreviewRenderer:
         count = 0
         slot_counter = 0
         for scene in plan.get("scenes", []):
-            title = str(scene.get("title", ""))
             for slot in scene.get("image_slots", []):
                 rel_path = str(slot.get("expected_image", ""))
                 if not rel_path:
@@ -301,7 +312,7 @@ class FfmpegPreviewRenderer:
                 command = self._build_placeholder_image_command(
                     output_path=output_path,
                     resolution=resolution,
-                    title=title,
+                    title=str(scene.get("title", "")),
                     focus=str(slot.get("visual_focus", "")),
                     shot_type=str(slot.get("shot_type", "keyframe")),
                     color=color,
