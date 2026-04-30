@@ -17,9 +17,10 @@ class FfmpegPreviewRenderer:
     3. fallback_black_video_with_sidecar_srt if placeholder generation is disabled.
     """
 
-    def __init__(self, ffmpeg_path: str = "ffmpeg", generate_placeholders: bool = True) -> None:
+    def __init__(self, ffmpeg_path: str = "ffmpeg", generate_placeholders: bool = True, burn_subtitles: bool = False) -> None:
         self.ffmpeg_path = self._resolve_ffmpeg(ffmpeg_path)
         self.generate_placeholders = generate_placeholders
+        self.burn_subtitles = burn_subtitles
 
     def render_from_file(self, episode_dir: Path | str, plan_file: str = "preview_render_plan.json") -> Dict[str, Any]:
         root = Path(episode_dir)
@@ -60,6 +61,7 @@ class FfmpegPreviewRenderer:
             image_items = self._collect_existing_image_items(episode_dir, plan)
 
         image_concat_path = preview_dir / "preview_image_concat.txt"
+        subtitle_filter = self._subtitle_filter(captions_source, captions_sidecar)
 
         if image_items:
             self._write_image_concat_file(image_items, image_concat_path)
@@ -68,6 +70,7 @@ class FfmpegPreviewRenderer:
                 output_path=output_path,
                 resolution=resolution,
                 fps=fps,
+                subtitle_filter=subtitle_filter,
             )
             if generated_placeholder_count > 0:
                 mode = "generated_placeholder_slide_preview"
@@ -79,8 +82,12 @@ class FfmpegPreviewRenderer:
                 duration=duration,
                 resolution=resolution,
                 fps=fps,
+                subtitle_filter=subtitle_filter,
             )
             mode = "fallback_black_video_with_sidecar_srt"
+
+        if subtitle_filter:
+            mode = mode + "_burned_subtitles"
 
         completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
         result = {
@@ -94,6 +101,7 @@ class FfmpegPreviewRenderer:
             "scene_manifest": str(scene_manifest_path),
             "ffmpeg_path": self.ffmpeg_path,
             "mode": mode,
+            "burn_subtitles": bool(subtitle_filter),
             "used_image_count": len(image_items),
             "generated_placeholder_count": generated_placeholder_count,
             "image_concat_file": str(image_concat_path) if image_items else "",
@@ -187,7 +195,10 @@ class FfmpegPreviewRenderer:
             return 1920, 1080
         return width, height
 
-    def _build_fallback_command(self, output_path: Path, duration: float, resolution: str, fps: int) -> List[str]:
+    def _build_fallback_command(self, output_path: Path, duration: float, resolution: str, fps: int, subtitle_filter: str) -> List[str]:
+        vf = "drawbox=x=0:y=0:w=iw:h=ih:color=#2f80ed@0.40:t=36,drawbox=x=iw*0.08:y=ih*0.18:w=iw*0.84:h=ih*0.64:color=#ffffff@0.16:t=8"
+        if subtitle_filter:
+            vf = vf + "," + subtitle_filter
         return [
             self.ffmpeg_path,
             "-y",
@@ -200,7 +211,7 @@ class FfmpegPreviewRenderer:
             "-i",
             "anullsrc=channel_layout=stereo:sample_rate=48000",
             "-vf",
-            "drawbox=x=0:y=0:w=iw:h=ih:color=#2f80ed@0.40:t=36,drawbox=x=iw*0.08:y=ih*0.18:w=iw*0.84:h=ih*0.64:color=#ffffff@0.16:t=8",
+            vf,
             "-shortest",
             "-c:v",
             "libx264",
@@ -213,12 +224,15 @@ class FfmpegPreviewRenderer:
             str(output_path),
         ]
 
-    def _build_image_slide_command(self, concat_file: Path, output_path: Path, resolution: str, fps: int) -> List[str]:
+    def _build_image_slide_command(self, concat_file: Path, output_path: Path, resolution: str, fps: int, subtitle_filter: str) -> List[str]:
         width, height = self._parse_resolution(resolution)
         scale_pad = (
             f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}"
         )
+        vf = scale_pad
+        if subtitle_filter:
+            vf = vf + "," + subtitle_filter
         return [
             self.ffmpeg_path,
             "-y",
@@ -233,7 +247,7 @@ class FfmpegPreviewRenderer:
             "-i",
             "anullsrc=channel_layout=stereo:sample_rate=48000",
             "-vf",
-            scale_pad,
+            vf,
             "-shortest",
             "-c:v",
             "libx264",
@@ -273,6 +287,22 @@ class FfmpegPreviewRenderer:
             "1",
             str(output_path),
         ]
+
+    def _subtitle_filter(self, captions_source: Path, captions_sidecar: Path) -> str:
+        if not self.burn_subtitles:
+            return ""
+        if not captions_source.exists():
+            return ""
+        subtitle_path = captions_sidecar if captions_sidecar.exists() else captions_source
+        escaped = self._escape_subtitle_path(subtitle_path.resolve())
+        style = "Fontsize=32,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=3,Outline=1,Shadow=0,MarginV=48"
+        return f"subtitles='{escaped}':force_style='{style}'"
+
+    def _escape_subtitle_path(self, path: Path) -> str:
+        value = str(path).replace("\\", "/")
+        value = value.replace(":", "\\:")
+        value = value.replace("'", "\\'")
+        return value
 
     def _collect_existing_image_items(self, episode_dir: Path, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
