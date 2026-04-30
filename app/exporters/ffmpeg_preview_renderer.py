@@ -11,10 +11,9 @@ from typing import Any, Dict, List, Optional
 class FfmpegPreviewRenderer:
     """Render a local-only MVP preview video from preview_render_plan.json.
 
-    This renderer intentionally has no third-party Python dependency. The first
-    implementation creates a black-background timing preview with silent audio
-    and copies captions as a sidecar SRT. Later versions can consume generated
-    keyframe images, narration WAV files, and burn-in subtitles.
+    The renderer supports two modes:
+    1. image_slide_preview_with_sidecar_srt when local keyframe images exist.
+    2. fallback_black_video_with_sidecar_srt when no keyframe image exists.
     """
 
     def __init__(self, ffmpeg_path: str = "ffmpeg") -> None:
@@ -52,12 +51,26 @@ class FfmpegPreviewRenderer:
         scene_manifest_path = preview_dir / "preview_scene_manifest.json"
         self._write_scene_manifest(plan, scene_manifest_path)
 
-        command = self._build_fallback_command(
-            output_path=output_path,
-            duration=duration,
-            resolution=resolution,
-            fps=fps,
-        )
+        image_items = self._collect_existing_image_items(episode_dir, plan)
+        image_concat_path = preview_dir / "preview_image_concat.txt"
+
+        if image_items:
+            self._write_image_concat_file(image_items, image_concat_path)
+            command = self._build_image_slide_command(
+                concat_file=image_concat_path,
+                output_path=output_path,
+                resolution=resolution,
+                fps=fps,
+            )
+            mode = "image_slide_preview_with_sidecar_srt"
+        else:
+            command = self._build_fallback_command(
+                output_path=output_path,
+                duration=duration,
+                resolution=resolution,
+                fps=fps,
+            )
+            mode = "fallback_black_video_with_sidecar_srt"
 
         completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
         result = {
@@ -70,7 +83,10 @@ class FfmpegPreviewRenderer:
             "captions_sidecar": str(captions_sidecar) if captions_source.exists() else "",
             "scene_manifest": str(scene_manifest_path),
             "ffmpeg_path": self.ffmpeg_path,
-            "mode": "fallback_black_video_with_sidecar_srt",
+            "mode": mode,
+            "used_image_count": len(image_items),
+            "image_concat_file": str(image_concat_path) if image_items else "",
+            "used_images": [str(item["image_path"]) for item in image_items],
         }
         (preview_dir / "preview_render_result.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2),
@@ -114,6 +130,7 @@ class FfmpegPreviewRenderer:
             cwd / "tools" / "ffmpeg" / "bin" / "ffmpeg.exe",
             cwd / "ffmpeg" / "bin" / "ffmpeg.exe",
             cwd / "bin" / "ffmpeg.exe",
+            Path("E:/ffmpeg/bin/ffmpeg.exe"),
             Path("C:/ffmpeg/bin/ffmpeg.exe"),
             Path("C:/ProgramData/chocolatey/bin/ffmpeg.exe"),
             home / "scoop" / "shims" / "ffmpeg.exe",
@@ -168,6 +185,72 @@ class FfmpegPreviewRenderer:
             "+faststart",
             str(output_path),
         ]
+
+    def _build_image_slide_command(self, concat_file: Path, output_path: Path, resolution: str, fps: int) -> List[str]:
+        scale_pad = (
+            f"scale={resolution}:force_original_aspect_ratio=decrease,"
+            f"pad={resolution}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={fps}"
+        )
+        return [
+            self.ffmpeg_path,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_file),
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-vf",
+            scale_pad,
+            "-shortest",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+
+    def _collect_existing_image_items(self, episode_dir: Path, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        for scene in plan.get("scenes", []):
+            scene_duration = float(scene.get("duration_sec", 0.0))
+            slot_duration = max(1.0, scene_duration / 3.0)
+            for slot in scene.get("image_slots", []):
+                rel_path = str(slot.get("expected_image", ""))
+                if not rel_path:
+                    continue
+                image_path = episode_dir / rel_path
+                if image_path.exists():
+                    items.append(
+                        {
+                            "image_path": image_path,
+                            "duration_sec": slot_duration,
+                            "scene_id": scene.get("scene_id", ""),
+                            "slot_id": slot.get("slot_id", ""),
+                        }
+                    )
+        return items
+
+    def _write_image_concat_file(self, image_items: List[Dict[str, Any]], output_path: Path) -> None:
+        lines: List[str] = []
+        for item in image_items:
+            image_path = Path(item["image_path"]).resolve()
+            escaped = str(image_path).replace("'", "'\\''")
+            lines.append(f"file '{escaped}'")
+            lines.append(f"duration {float(item['duration_sec']):.3f}")
+        if image_items:
+            last_path = Path(image_items[-1]["image_path"]).resolve()
+            escaped_last = str(last_path).replace("'", "'\\''")
+            lines.append(f"file '{escaped_last}'")
+        output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     def _write_scene_manifest(self, plan: Dict[str, Any], output_path: Path) -> None:
         manifest = {
