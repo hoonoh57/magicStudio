@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>magicStudio</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="brand">magicStudio</div>
+        <div class="subtitle">프로젝트 → 시나리오 → 프롬프트 → 이미지·음성 → 동영상 → 검수</div>
+      </div>
+      <div class="top-actions">
+        <span id="serverState" class="pill">서버 확인 중</span>
+        <button id="btnSettings" class="btn ghost">설정</button>
+      </div>
+    </header>
+
+    <section class="command-card">
+      <div class="field-row">
+        <input id="projectTitle" type="text" placeholder="프로젝트명" />
+        <input id="projectIdea" type="text" placeholder="한 줄 아이디어" />
+      </div>
+      <textarea id="masterCommand" class="master-command" placeholder="예: 이 원고로 1분짜리 쇼츠 프리뷰를 만들고, 한국어 TTS와 자막을 넣어줘."></textarea>
+      <div class="main-actions">
+        <button id="btnMakeAll" class="btn primary">전체 자동 제작</button>
+        <button id="btnSave" class="btn">저장</button>
+        <button id="btnLoad" class="btn">불러오기</button>
+        <button id="btnRefresh" class="btn">목록 갱신</button>
+      </div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="project">1 프로젝트</button>
+      <button class="tab" data-tab="scenario">2 시나리오</button>
+      <button class="tab" data-tab="prompt">3 프롬프트</button>
+      <button class="tab" data-tab="media">4 이미지·음성</button>
+      <button class="tab" data-tab="video">5 동영상</button>
+      <button class="tab" data-tab="inspect">6 검수/Export</button>
+    </nav>
+
+    <main class="workspace">
+      <aside class="panel side-panel">
+        <div class="panel-head">프로젝트 목록</div>
+        <div id="projectList" class="project-list"></div>
+      </aside>
+
+      <section class="panel stage-panel">
+        <div id="stage-project" class="stage active">
+          <h2>프로젝트 선택</h2>
+          <p class="muted">새 작업은 프로젝트명을 입력하고 저장합니다. 기존 작업은 왼쪽 목록에서 선택합니다.</p>
+          <div class="notice" id="projectPathBox">저장 경로가 여기에 표시됩니다.</div>
+        </div>
+
+        <div id="stage-scenario" class="stage">
+          <h2>시나리오</h2>
+          <p class="muted">이 원고가 이후 장면 분해, 프롬프트, TTS, 영상 생성의 기준입니다.</p>
+          <textarea id="scenarioText" class="scenario-text"></textarea>
+          <div class="stage-actions">
+            <button id="btnBuildScenes" class="btn primary">장면/프롬프트 생성</button>
+          </div>
+        </div>
+
+        <div id="stage-prompt" class="stage">
+          <h2>프롬프트</h2>
+          <p class="muted">생성된 장면별 키프레임 프롬프트를 확인합니다.</p>
+          <div id="promptList" class="card-list"></div>
+        </div>
+
+        <div id="stage-media" class="stage">
+          <h2>이미지·음성</h2>
+          <p class="muted">현재는 Windows SAPI 한국어 TTS 생성까지 연결되어 있습니다.</p>
+          <div class="stage-actions">
+            <button id="btnTts" class="btn primary">TTS 생성</button>
+            <button id="btnInspectMedia" class="btn">자산 검수</button>
+          </div>
+          <pre id="mediaResult" class="prebox"></pre>
+        </div>
+
+        <div id="stage-video" class="stage">
+          <h2>동영상</h2>
+          <p class="muted">자막 burn-in과 TTS 음성을 포함한 MP4 프리뷰를 생성합니다.</p>
+          <div class="stage-actions">
+            <button id="btnRender" class="btn primary">프리뷰 렌더</button>
+          </div>
+          <video id="previewVideo" controls></video>
+          <pre id="previewResult" class="prebox"></pre>
+        </div>
+
+        <div id="stage-inspect" class="stage">
+          <h2>검수/Export</h2>
+          <p class="muted">누락 자산, 생성 자산, 프리뷰 산출물을 확인합니다.</p>
+          <div class="stage-actions">
+            <button id="btnInspect" class="btn primary">검수 리포트 생성</button>
+          </div>
+          <pre id="assetReport" class="prebox report"></pre>
+        </div>
+      </section>
+
+      <aside class="panel status-panel">
+        <div class="panel-head">진행 상태</div>
+        <div id="statusList" class="status-list"></div>
+        <div class="panel-head secondary-head">로그</div>
+        <pre id="logBox" class="logbox"></pre>
+      </aside>
+    </main>
+  </div>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <h3>설정</h3>
+    <label>TTS 음성</label>
+    <select id="voiceSelect">
+      <option>Microsoft Heami Desktop</option>
+      <option>Microsoft Zira Desktop</option>
+      <option>Microsoft David Desktop</option>
+    </select>
+    <label>자막</label>
+    <select id="subtitleMode">
+      <option value="true">영상에 직접 입히기</option>
+      <option value="false">SRT 파일만 생성</option>
+    </select>
+    <div class="dialog-actions">
+      <button id="btnCloseSettings" class="btn primary">닫기</button>
+    </div>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
