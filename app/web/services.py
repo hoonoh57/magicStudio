@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -265,6 +266,17 @@ def load_episode(workspace: Path, title: str, episode_id: str) -> Dict[str, Any]
     scenario = read_text_smart(ep_dir / "scenario.md") or DEFAULT_SCENARIO
     meta = read_json(ep_dir / "web_meta.json")
     return {"episode_id": ep_id, "episode_title": meta.get("episode_title", ep_id), "episode_dir": str(ep_dir), "scenario_path": str(ep_dir / "scenario.md"), "scenario": scenario, "exists": ep_dir.exists()}
+
+
+def delete_episode(workspace: Path, title: str, episode_id: str) -> Dict[str, Any]:
+    ep_id = safe_episode_id(episode_id)
+    ep_dir = episode_dir(workspace, title, ep_id)
+    if ep_dir.exists():
+        shutil.rmtree(ep_dir)
+        deleted = True
+    else:
+        deleted = False
+    return {"episode_id": ep_id, "episode_dir": str(ep_dir), "deleted": deleted}
 
 
 def create_episode_from_chunk(workspace: Path, title: str, chunk_id: str, episode_id: str) -> Dict[str, Any]:
