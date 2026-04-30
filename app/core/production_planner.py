@@ -40,6 +40,7 @@ class ProductionPlanner:
                         "scene_id": scene_id,
                         "scene_title": title,
                         "keyframe_id": keyframe_id,
+                        "shot_type": self._shot_type(keyframe_id),
                         "time_sec": keyframe.get("time_sec", 0),
                         "style_ref": style_ref,
                         "visual_focus": focus_text,
@@ -208,14 +209,18 @@ class ProductionPlanner:
         emotion: str,
         focus_text: str,
     ) -> str:
-        return (
+        safe_focus = self._strip_terminal_punctuation(focus_text)
+        safe_location = self._strip_terminal_punctuation(location_desc)
+        safe_emotion = self._strip_terminal_punctuation(emotion)
+        prompt = (
             f"Style: {style_ref}. "
             f"Scene: {title}. "
-            f"Visual focus: {focus_text}. "
-            f"Location: {location_desc}. "
-            f"Character emotion: {emotion}. "
+            f"Visual focus: {safe_focus}. "
+            f"Location: {safe_location}. "
+            f"Character emotion: {safe_emotion}. "
             "Cinematic composition, consistent character design, coherent lighting, production-ready keyframe."
         )
+        return self._clean_prompt(prompt)
 
     def _focus_text_for_keyframe(self, keyframe_id: str, keyframe_desc: str, source_text: str) -> str:
         cleaned_desc = self._clean_sentence(keyframe_desc)
@@ -234,7 +239,7 @@ class ProductionPlanner:
         cleaned = self._clean_sentence(text)
         if "project_bible.location_defaults" in cleaned:
             return "이전 장면과 연결되는 봉인실 또는 핵심 사건 장소"
-        return cleaned.rstrip(".")
+        return self._strip_terminal_punctuation(cleaned)
 
     def _clean_sentence(self, text: str) -> str:
         cleaned = " ".join(text.split())
@@ -242,6 +247,15 @@ class ProductionPlanner:
         cleaned = re.sub(r"([.,!?。！？]){2,}", r"\1", cleaned)
         cleaned = re.sub(r"\.\s*\.", ".", cleaned)
         return cleaned.strip()
+
+    def _clean_prompt(self, text: str) -> str:
+        cleaned = self._clean_sentence(text)
+        cleaned = re.sub(r"\.\s*\.", ".", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        return cleaned.strip()
+
+    def _strip_terminal_punctuation(self, text: str) -> str:
+        return self._clean_sentence(text).rstrip(" .,!?:;。！？")
 
     def _middle_phrase(self, source_text: str) -> str:
         cleaned = self._clean_sentence(source_text)
@@ -277,6 +291,15 @@ class ProductionPlanner:
         if "Visual focus:" in prompt and "Location:" in prompt:
             score += 5.0
         return min(100.0, round(score, 2))
+
+    def _shot_type(self, keyframe_id: str) -> str:
+        if keyframe_id == "start":
+            return "establishing_or_reveal"
+        if keyframe_id == "mid":
+            return "character_reaction_or_action_focus"
+        if keyframe_id == "end":
+            return "hook_or_closeup"
+        return "keyframe"
 
     def _negative_prompt(self) -> str:
         return (
