@@ -60,6 +60,8 @@ class FfmpegPreviewRenderer:
             generated_placeholder_count = self._generate_placeholder_keyframes(episode_dir, plan, resolution)
             image_items = self._collect_existing_image_items(episode_dir, plan)
 
+        audio_result = self._build_preview_audio(episode_dir, plan, preview_dir)
+        audio_input_path = str(audio_result.get("audio_path", ""))
         image_concat_path = preview_dir / "preview_image_concat.txt"
         subtitle_filter = self._subtitle_filter(captions_source, captions_sidecar)
 
@@ -71,6 +73,7 @@ class FfmpegPreviewRenderer:
                 resolution=resolution,
                 fps=fps,
                 subtitle_filter=subtitle_filter,
+                audio_input_path=audio_input_path,
             )
             if generated_placeholder_count > 0:
                 mode = "generated_placeholder_slide_preview"
@@ -83,11 +86,14 @@ class FfmpegPreviewRenderer:
                 resolution=resolution,
                 fps=fps,
                 subtitle_filter=subtitle_filter,
+                audio_input_path=audio_input_path,
             )
             mode = "fallback_black_video_with_sidecar_srt"
 
         if subtitle_filter:
             mode = mode + "_burned_subtitles"
+        if audio_result.get("used_real_audio_count", 0) > 0:
+            mode = mode + "_with_narration_audio"
 
         completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
         result = {
@@ -106,6 +112,7 @@ class FfmpegPreviewRenderer:
             "generated_placeholder_count": generated_placeholder_count,
             "image_concat_file": str(image_concat_path) if image_items else "",
             "used_images": [str(item["image_path"]) for item in image_items],
+            "audio": audio_result,
         }
         (preview_dir / "preview_render_result.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2),
@@ -195,21 +202,23 @@ class FfmpegPreviewRenderer:
             return 1920, 1080
         return width, height
 
-    def _build_fallback_command(self, output_path: Path, duration: float, resolution: str, fps: int, subtitle_filter: str) -> List[str]:
+    def _build_fallback_command(self, output_path: Path, duration: float, resolution: str, fps: int, subtitle_filter: str, audio_input_path: str) -> List[str]:
         vf = "drawbox=x=0:y=0:w=iw:h=ih:color=#2f80ed@0.40:t=36,drawbox=x=iw*0.08:y=ih*0.18:w=iw*0.84:h=ih*0.64:color=#ffffff@0.16:t=8"
         if subtitle_filter:
             vf = vf + "," + subtitle_filter
-        return [
+        command = [
             self.ffmpeg_path,
             "-y",
             "-f",
             "lavfi",
             "-i",
             f"color=c=#101018:s={resolution}:r={fps}:d={duration}",
-            "-f",
-            "lavfi",
-            "-i",
-            "anullsrc=channel_layout=stereo:sample_rate=48000",
+        ]
+        if audio_input_path:
+            command.extend(["-i", audio_input_path])
+        else:
+            command.extend(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"])
+        command.extend([
             "-vf",
             vf,
             "-shortest",
@@ -222,9 +231,10 @@ class FfmpegPreviewRenderer:
             "-movflags",
             "+faststart",
             str(output_path),
-        ]
+        ])
+        return command
 
-    def _build_image_slide_command(self, concat_file: Path, output_path: Path, resolution: str, fps: int, subtitle_filter: str) -> List[str]:
+    def _build_image_slide_command(self, concat_file: Path, output_path: Path, resolution: str, fps: int, subtitle_filter: str, audio_input_path: str) -> List[str]:
         width, height = self._parse_resolution(resolution)
         scale_pad = (
             f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
@@ -233,7 +243,7 @@ class FfmpegPreviewRenderer:
         vf = scale_pad
         if subtitle_filter:
             vf = vf + "," + subtitle_filter
-        return [
+        command = [
             self.ffmpeg_path,
             "-y",
             "-f",
@@ -242,10 +252,12 @@ class FfmpegPreviewRenderer:
             "0",
             "-i",
             str(concat_file),
-            "-f",
-            "lavfi",
-            "-i",
-            "anullsrc=channel_layout=stereo:sample_rate=48000",
+        ]
+        if audio_input_path:
+            command.extend(["-i", audio_input_path])
+        else:
+            command.extend(["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"])
+        command.extend([
             "-vf",
             vf,
             "-shortest",
@@ -258,7 +270,8 @@ class FfmpegPreviewRenderer:
             "-movflags",
             "+faststart",
             str(output_path),
-        ]
+        ])
+        return command
 
     def _build_placeholder_image_command(
         self,
@@ -303,6 +316,121 @@ class FfmpegPreviewRenderer:
         value = value.replace(":", "\\:")
         value = value.replace("'", "\\'")
         return value
+
+    def _build_preview_audio(self, episode_dir: Path, plan: Dict[str, Any], preview_dir: Path) -> Dict[str, Any]:
+        segments_dir = preview_dir / "audio_segments"
+        segments_dir.mkdir(parents=True, exist_ok=True)
+        concat_path = preview_dir / "preview_audio_concat.txt"
+        audio_path = preview_dir / "preview_audio.wav"
+        scene_rows: List[Dict[str, Any]] = []
+        concat_lines: List[str] = []
+        used_real_audio_count = 0
+        generated_silence_count = 0
+
+        for index, scene in enumerate(plan.get("scenes", []), start=1):
+            duration = float(scene.get("duration_sec", 0.0))
+            if duration <= 0:
+                continue
+            scene_id = str(scene.get("scene_id", f"scene_{index}"))
+            expected_audio = str(scene.get("narration", {}).get("expected_audio", ""))
+            source_audio = episode_dir / expected_audio if expected_audio else Path("")
+            segment_path = segments_dir / f"{index:03d}_{scene_id}.wav"
+            if source_audio.exists() and source_audio.is_file():
+                command = self._build_audio_segment_from_source_command(source_audio, segment_path, duration)
+                used_real_audio_count += 1
+                source_kind = "real_audio"
+            else:
+                command = self._build_silence_segment_command(segment_path, duration)
+                generated_silence_count += 1
+                source_kind = "generated_silence"
+            completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if completed.returncode != 0:
+                command = self._build_silence_segment_command(segment_path, duration)
+                completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                source_kind = "generated_silence_after_audio_failure"
+            if completed.returncode == 0 and segment_path.exists():
+                escaped = str(segment_path.resolve()).replace("'", "'\\''")
+                concat_lines.append(f"file '{escaped}'")
+                scene_rows.append({
+                    "scene_id": scene_id,
+                    "source_kind": source_kind,
+                    "expected_audio": expected_audio,
+                    "segment_path": str(segment_path),
+                    "duration_sec": duration,
+                })
+
+        if not concat_lines:
+            return {
+                "audio_path": "",
+                "used_real_audio_count": 0,
+                "generated_silence_count": 0,
+                "segments": [],
+            }
+
+        concat_path.write_text("\n".join(concat_lines) + "\n", encoding="utf-8")
+        command = [
+            self.ffmpeg_path,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_path),
+            "-c",
+            "copy",
+            str(audio_path),
+        ]
+        completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if completed.returncode != 0 or not audio_path.exists():
+            return {
+                "audio_path": "",
+                "used_real_audio_count": used_real_audio_count,
+                "generated_silence_count": generated_silence_count,
+                "segments": scene_rows,
+                "error": completed.stderr,
+            }
+        return {
+            "audio_path": str(audio_path),
+            "concat_file": str(concat_path),
+            "used_real_audio_count": used_real_audio_count,
+            "generated_silence_count": generated_silence_count,
+            "segments": scene_rows,
+        }
+
+    def _build_audio_segment_from_source_command(self, source_audio: Path, segment_path: Path, duration: float) -> List[str]:
+        return [
+            self.ffmpeg_path,
+            "-y",
+            "-i",
+            str(source_audio),
+            "-t",
+            f"{duration:.3f}",
+            "-af",
+            "apad,aresample=48000",
+            "-ac",
+            "2",
+            "-ar",
+            "48000",
+            str(segment_path),
+        ]
+
+    def _build_silence_segment_command(self, segment_path: Path, duration: float) -> List[str]:
+        return [
+            self.ffmpeg_path,
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-t",
+            f"{duration:.3f}",
+            "-ac",
+            "2",
+            "-ar",
+            "48000",
+            str(segment_path),
+        ]
 
     def _collect_existing_image_items(self, episode_dir: Path, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
