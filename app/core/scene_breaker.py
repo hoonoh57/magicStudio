@@ -30,6 +30,7 @@ class SceneBreaker:
                     title=title,
                     dramatic_function=self._dramatic_function(body, index, len(blocks)),
                     duration_sec=self._estimate_duration(body),
+                    source_text=body,
                     status="DRAFT",
                 )
             )
