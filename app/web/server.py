@@ -57,10 +57,27 @@ class MagicStudioHandler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "projects": services.list_projects(self.workspace)})
             elif parsed.path == "/api/project":
                 title = parse_qs(parsed.query).get("title", [services.DEFAULT_TITLE])[0]
-                self._json(services.load_project(self.workspace, title))
-            elif parsed.path == "/api/assets/inspect":
+                episode_id = parse_qs(parsed.query).get("episode_id", ["ep001"])[0]
+                self._json(services.load_project(self.workspace, title, episode_id))
+            elif parsed.path == "/api/manuscript/load":
                 title = parse_qs(parsed.query).get("title", [services.DEFAULT_TITLE])[0]
-                self._json({"ok": True, **services.inspect_assets(self.workspace, title)})
+                self._json({"ok": True, **services.load_manuscript(self.workspace, title)})
+            elif parsed.path == "/api/manuscript/chunks":
+                title = parse_qs(parsed.query).get("title", [services.DEFAULT_TITLE])[0]
+                self._json({"ok": True, **services.list_chunks(self.workspace, title)})
+            elif parsed.path == "/api/episodes":
+                title = parse_qs(parsed.query).get("title", [services.DEFAULT_TITLE])[0]
+                self._json({"ok": True, **services.list_episodes(self.workspace, title)})
+            elif parsed.path == "/api/episode/load":
+                query = parse_qs(parsed.query)
+                title = query.get("title", [services.DEFAULT_TITLE])[0]
+                episode_id = query.get("episode_id", ["ep001"])[0]
+                self._json({"ok": True, **services.load_episode(self.workspace, title, episode_id)})
+            elif parsed.path == "/api/assets/inspect":
+                query = parse_qs(parsed.query)
+                title = query.get("title", [services.DEFAULT_TITLE])[0]
+                episode_id = query.get("episode_id", ["ep001"])[0]
+                self._json({"ok": True, **services.inspect_assets(self.workspace, title, episode_id)})
             elif parsed.path.startswith("/media/"):
                 self._serve_media(parsed.path)
             elif parsed.path == "/favicon.ico":
@@ -80,19 +97,33 @@ class MagicStudioHandler(BaseHTTPRequestHandler):
             scenario = str(payload.get("scenario", services.DEFAULT_SCENARIO)) or services.DEFAULT_SCENARIO
             voice = str(payload.get("voice", "Microsoft Heami Desktop")) or "Microsoft Heami Desktop"
             burn_subtitles = bool(payload.get("burn_subtitles", True))
+            episode_id = str(payload.get("episode_id", "ep001")) or "ep001"
 
             if parsed.path == "/api/project/save":
                 self._json({"ok": True, **services.save_project(self.workspace, title, idea, scenario)})
+            elif parsed.path == "/api/manuscript/save":
+                manuscript = str(payload.get("manuscript", ""))
+                self._json({"ok": True, **services.save_manuscript(self.workspace, title, idea, manuscript)})
+            elif parsed.path == "/api/manuscript/split":
+                target_chars = int(payload.get("target_chars", 2500) or 2500)
+                self._json({"ok": True, **services.split_manuscript(self.workspace, title, target_chars)})
+            elif parsed.path == "/api/episode/create-from-chunk":
+                chunk_id = str(payload.get("chunk_id", ""))
+                new_episode_id = str(payload.get("episode_id", "ep001")) or "ep001"
+                self._json({"ok": True, **services.create_episode_from_chunk(self.workspace, title, chunk_id, new_episode_id)})
+            elif parsed.path == "/api/episode/save":
+                episode_title = str(payload.get("episode_title", episode_id))
+                self._json({"ok": True, **services.save_episode(self.workspace, title, episode_id, scenario, episode_title)})
             elif parsed.path == "/api/scenario/build":
-                self._json({"ok": True, **services.build_pipeline(self.workspace, title, idea, scenario)})
+                self._json({"ok": True, **services.build_pipeline(self.workspace, title, idea, scenario, episode_id)})
             elif parsed.path == "/api/tts/synth":
-                self._json({"ok": True, **services.synth_tts(self.workspace, title, voice)})
+                self._json({"ok": True, **services.synth_tts(self.workspace, title, voice, episode_id)})
             elif parsed.path == "/api/preview/render":
-                self._json({"ok": True, **services.render_preview_video(self.workspace, title, burn_subtitles)})
+                self._json({"ok": True, **services.render_preview_video(self.workspace, title, burn_subtitles, episode_id)})
             elif parsed.path == "/api/assets/inspect":
-                self._json({"ok": True, **services.inspect_assets(self.workspace, title)})
+                self._json({"ok": True, **services.inspect_assets(self.workspace, title, episode_id)})
             elif parsed.path == "/api/make/all":
-                self._json({"ok": True, **services.make_all(self.workspace, title, idea, scenario, voice, burn_subtitles)})
+                self._json({"ok": True, **services.make_all(self.workspace, title, idea, scenario, voice, burn_subtitles, episode_id)})
             else:
                 self._json({"ok": False, "error": "not found"}, 404)
         except Exception as exc:
