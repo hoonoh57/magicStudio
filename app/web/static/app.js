@@ -2,7 +2,6 @@ const App = {
   title: '',
   currentTab: 'project',
   project: null,
-  selectedChunkId: '',
   episodeId: 'ep001',
 };
 
@@ -60,7 +59,6 @@ function payload() {
     title: qs('projectTitle').value.trim() || '불법강호',
     idea: qs('projectIdea').value.trim(),
     scenario: qs('scenarioText').value,
-    manuscript: qs('manuscriptText') ? qs('manuscriptText').value : '',
     episode_id: (qs('episodeId') ? qs('episodeId').value.trim() : App.episodeId) || 'ep001',
     command: qs('masterCommand').value,
     voice: qs('voiceSelect').value,
@@ -78,6 +76,15 @@ function switchTab(tabName) {
   });
 }
 
+function nextEpisodeId(episodes) {
+  let maxNo = 0;
+  (episodes || []).forEach((episode) => {
+    const match = String(episode.episode_id || '').match(/\d+/);
+    if (match) maxNo = Math.max(maxNo, Number(match[0]));
+  });
+  return 'ep' + String(maxNo + 1).padStart(3, '0');
+}
+
 function renderProjects(projects) {
   const box = qs('projectList');
   box.innerHTML = '';
@@ -91,6 +98,7 @@ function renderProjects(projects) {
     item.innerHTML = `<b>${escapeHtml(project.title)}</b><div class="muted">${escapeHtml(project.status || '')}</div><div class="muted">${escapeHtml(project.path || '')}</div>`;
     item.addEventListener('click', async () => {
       qs('projectTitle').value = project.title;
+      App.episodeId = 'ep001';
       await loadProject();
       await loadProjects();
       switchTab('scenario');
@@ -104,13 +112,9 @@ function renderStatus(project) {
   const summary = project?.asset_manifest?.summary || {};
   const preview = project?.preview_result || {};
   const audio = preview.audio || {};
-  const manuscriptExists = Boolean(project?.manuscript?.exists);
   const episodeCount = Number(project?.episodes?.count || 0);
-  const chunkCount = Number(project?.chunks?.count || 0);
   const rows = [
     ['프로젝트', Boolean(project?.exists)],
-    ['전체 원고', manuscriptExists],
-    ['원고 조각', chunkCount > 0],
     ['회차', episodeCount > 0],
     ['프롬프트', Boolean(project?.keyframe_prompts)],
     ['TTS 음성', Number(audio.used_real_audio_count || 0) > 0],
@@ -131,7 +135,7 @@ function renderPrompts(project) {
   box.innerHTML = '';
   const prompts = project?.keyframe_prompts?.prompts || [];
   if (prompts.length === 0) {
-    box.innerHTML = '<div class="muted">아직 프롬프트가 없습니다. 먼저 “장면/프롬프트 생성”을 누르세요.</div>';
+    box.innerHTML = '<div class="muted">아직 프롬프트가 없습니다. 먼저 “이 회차로 장면/프롬프트 생성”을 누르세요.</div>';
     return;
   }
   prompts.forEach((prompt, index) => {
@@ -142,54 +146,23 @@ function renderPrompts(project) {
   });
 }
 
-function renderManuscript(project) {
-  const textArea = qs('manuscriptText');
-  if (!textArea) return;
-  const manuscript = project?.manuscript?.text || '';
-  if (manuscript && !textArea.dataset.dirty) {
-    textArea.value = manuscript;
-  }
-  renderChunks(project?.chunks?.chunks || []);
-  renderEpisodes(project?.episodes?.episodes || []);
-}
-
-function renderChunks(chunks) {
-  const box = qs('chunkList');
-  if (!box) return;
-  box.innerHTML = '';
-  if (!chunks || chunks.length === 0) {
-    box.innerHTML = '<div class="muted">원고를 저장하고 “원고 자동 분할”을 누르세요.</div>';
-    return;
-  }
-  chunks.forEach((chunk) => {
-    const item = document.createElement('div');
-    item.className = 'mini-item' + (chunk.chunk_id === App.selectedChunkId ? ' active' : '');
-    item.innerHTML = `<b>${escapeHtml(chunk.chunk_id)}</b><div class="muted">${chunk.char_count || 0}자 · ${escapeHtml(chunk.preview || '')}</div>`;
-    item.addEventListener('click', () => {
-      App.selectedChunkId = chunk.chunk_id;
-      renderChunks(chunks);
-      log(`조각 선택: ${chunk.chunk_id}`);
-    });
-    box.appendChild(item);
-  });
-}
-
 function renderEpisodes(episodes) {
   const box = qs('episodeList');
   if (!box) return;
   box.innerHTML = '';
   if (!episodes || episodes.length === 0) {
-    box.innerHTML = '<div class="muted">아직 회차가 없습니다.</div>';
+    box.innerHTML = '<div class="muted">아직 회차가 없습니다. 오른쪽에서 ep001을 저장하세요.</div>';
     return;
   }
   episodes.forEach((episode) => {
     const item = document.createElement('div');
     item.className = 'mini-item' + (episode.episode_id === App.episodeId ? ' active' : '');
-    item.innerHTML = `<b>${escapeHtml(episode.episode_id)}</b><div class="muted">${episode.char_count || 0}자 · ${escapeHtml(episode.preview || '')}</div>`;
+    item.innerHTML = `<b>${escapeHtml(episode.episode_id)}</b><div class="muted">${episode.char_count || 0}자</div><div class="muted">${escapeHtml(episode.preview || '')}</div>`;
     item.addEventListener('click', async () => {
       App.episodeId = episode.episode_id;
       qs('episodeId').value = episode.episode_id;
       await loadEpisode();
+      await loadProject();
     });
     box.appendChild(item);
   });
@@ -213,7 +186,7 @@ function renderProject(project) {
   qs('projectPathBox').textContent = project.project_root ? `프로젝트 경로: ${project.project_root}\n원고 경로: ${project.scenario_path}` : '저장 경로가 여기에 표시됩니다.';
   renderStatus(project);
   renderPrompts(project);
-  renderManuscript(project);
+  renderEpisodes(project?.episodes?.episodes || []);
   renderPreview(project);
   if (project.asset_report) {
     qs('assetReport').textContent = project.asset_report;
@@ -225,7 +198,6 @@ async function loadDefaults() {
   qs('projectTitle').value = data.title;
   qs('projectIdea').value = data.idea;
   qs('scenarioText').value = data.scenario;
-  qs('manuscriptText').value = data.scenario;
   qs('masterCommand').value = '선택 회차 원고로 1분짜리 쇼츠 프리뷰를 만들고, 한국어 TTS와 자막을 넣어줘.';
 }
 
@@ -240,51 +212,18 @@ async function loadProjects() {
   log(`프로젝트 목록 로드: ${(data.projects || []).length}개`);
 }
 
-async function saveProject() {
-  const data = await postJson('/api/project/save', payload());
-  log(`현재 회차 저장 완료: ${data.scenario_path}`);
-  await loadProjects();
-  await loadProject();
-}
-
 async function loadProject() {
   const data = await getJson(`/api/project?title=${encodeURIComponent(qs('projectTitle').value.trim() || '불법강호')}&episode_id=${encodeURIComponent(App.episodeId || 'ep001')}`);
   renderProject(data);
   log(`불러오기 완료: ${data.title} / ${data.episode_id || 'ep001'}`);
 }
 
-async function saveManuscript() {
-  const data = await postJson('/api/manuscript/save', payload());
-  qs('manuscriptText').dataset.dirty = '';
-  log(`전체 원고 저장 완료: ${data.manuscript_path}`);
-  await loadProject();
-}
-
-async function loadManuscript() {
-  const data = await getJson(`/api/manuscript/load?title=${encodeURIComponent(qs('projectTitle').value.trim() || '불법강호')}`);
-  qs('manuscriptText').value = data.text || '';
-  qs('manuscriptText').dataset.dirty = '';
-  log(`전체 원고 불러오기 완료: ${String(data.text || '').length}자`);
-}
-
-async function splitManuscript() {
-  const targetChars = Number(qs('targetChars').value || 2500);
-  const data = await postJson('/api/manuscript/split', { ...payload(), target_chars: targetChars });
-  log(`원고 자동 분할 완료: ${data.count}개`);
-  await loadProject();
-}
-
-async function createEpisodeFromChunk() {
-  if (!App.selectedChunkId) {
-    throw new Error('먼저 원고 조각을 선택하세요.');
-  }
-  const episodeId = qs('newEpisodeId').value.trim() || 'ep001';
-  const data = await postJson('/api/episode/create-from-chunk', { ...payload(), chunk_id: App.selectedChunkId, episode_id: episodeId });
-  App.episodeId = data.episode_id || episodeId;
+function newEpisode() {
+  const episodes = App.project?.episodes?.episodes || [];
+  App.episodeId = nextEpisodeId(episodes);
   qs('episodeId').value = App.episodeId;
-  log(`회차 생성 완료: ${App.episodeId} <= ${App.selectedChunkId}`);
-  await loadEpisode();
-  await loadProject();
+  qs('scenarioText').value = '';
+  log(`새 회차 준비: ${App.episodeId}`);
 }
 
 async function loadEpisode() {
@@ -300,6 +239,19 @@ async function saveEpisode() {
   const data = await postJson('/api/episode/save', payload());
   App.episodeId = data.episode_id || payload().episode_id;
   log(`회차 저장 완료: ${App.episodeId} / ${data.char_count || 0}자`);
+  await loadProject();
+  await loadProjects();
+}
+
+async function deleteEpisode() {
+  const episodeId = qs('episodeId').value.trim() || App.episodeId || 'ep001';
+  const ok = window.confirm(`${episodeId} 회차를 삭제할까요?`);
+  if (!ok) return;
+  const data = await postJson('/api/episode/delete', { ...payload(), episode_id: episodeId });
+  log(`회차 삭제: ${data.episode_id} / deleted=${data.deleted}`);
+  App.episodeId = 'ep001';
+  qs('episodeId').value = 'ep001';
+  qs('scenarioText').value = '';
   await loadProject();
 }
 
@@ -357,18 +309,15 @@ function bindEvents() {
   qs('btnSave').addEventListener('click', async () => safeRun(saveEpisode));
   qs('btnLoad').addEventListener('click', async () => safeRun(loadProject));
   qs('btnMakeAll').addEventListener('click', async () => safeRun(makeAll));
-  qs('btnSaveManuscript').addEventListener('click', async () => safeRun(saveManuscript));
-  qs('btnLoadManuscript').addEventListener('click', async () => safeRun(loadManuscript));
-  qs('btnSplitManuscript').addEventListener('click', async () => safeRun(splitManuscript));
-  qs('btnCreateEpisodeFromChunk').addEventListener('click', async () => safeRun(createEpisodeFromChunk));
+  qs('btnNewEpisode').addEventListener('click', newEpisode);
   qs('btnLoadEpisode').addEventListener('click', async () => safeRun(loadEpisode));
   qs('btnSaveEpisode').addEventListener('click', async () => safeRun(saveEpisode));
+  qs('btnDeleteEpisode').addEventListener('click', async () => safeRun(deleteEpisode));
   qs('btnBuildScenes').addEventListener('click', async () => safeRun(buildScenes));
   qs('btnTts').addEventListener('click', async () => safeRun(synthTts));
   qs('btnInspectMedia').addEventListener('click', async () => safeRun(inspectAssets));
   qs('btnRender').addEventListener('click', async () => safeRun(renderVideo));
   qs('btnInspect').addEventListener('click', async () => safeRun(inspectAssets));
-  qs('manuscriptText').addEventListener('input', () => { qs('manuscriptText').dataset.dirty = '1'; });
 }
 
 async function safeRun(fn) {
