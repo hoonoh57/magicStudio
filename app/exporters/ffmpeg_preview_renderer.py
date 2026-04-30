@@ -11,13 +11,15 @@ from typing import Any, Dict, List, Optional
 class FfmpegPreviewRenderer:
     """Render a local-only MVP preview video from preview_render_plan.json.
 
-    The renderer supports two modes:
+    The renderer supports three modes:
     1. image_slide_preview_with_sidecar_srt when local keyframe images exist.
-    2. fallback_black_video_with_sidecar_srt when no keyframe image exists.
+    2. generated_placeholder_slide_preview when no keyframe image exists.
+    3. fallback_black_video_with_sidecar_srt if placeholder generation is disabled.
     """
 
-    def __init__(self, ffmpeg_path: str = "ffmpeg") -> None:
+    def __init__(self, ffmpeg_path: str = "ffmpeg", generate_placeholders: bool = True) -> None:
         self.ffmpeg_path = self._resolve_ffmpeg(ffmpeg_path)
+        self.generate_placeholders = generate_placeholders
 
     def render_from_file(self, episode_dir: Path | str, plan_file: str = "preview_render_plan.json") -> Dict[str, Any]:
         root = Path(episode_dir)
@@ -52,6 +54,11 @@ class FfmpegPreviewRenderer:
         self._write_scene_manifest(plan, scene_manifest_path)
 
         image_items = self._collect_existing_image_items(episode_dir, plan)
+        generated_placeholder_count = 0
+        if not image_items and self.generate_placeholders:
+            generated_placeholder_count = self._generate_placeholder_keyframes(episode_dir, plan, resolution)
+            image_items = self._collect_existing_image_items(episode_dir, plan)
+
         image_concat_path = preview_dir / "preview_image_concat.txt"
 
         if image_items:
@@ -62,7 +69,10 @@ class FfmpegPreviewRenderer:
                 resolution=resolution,
                 fps=fps,
             )
-            mode = "image_slide_preview_with_sidecar_srt"
+            if generated_placeholder_count > 0:
+                mode = "generated_placeholder_slide_preview"
+            else:
+                mode = "image_slide_preview_with_sidecar_srt"
         else:
             command = self._build_fallback_command(
                 output_path=output_path,
@@ -85,6 +95,7 @@ class FfmpegPreviewRenderer:
             "ffmpeg_path": self.ffmpeg_path,
             "mode": mode,
             "used_image_count": len(image_items),
+            "generated_placeholder_count": generated_placeholder_count,
             "image_concat_file": str(image_concat_path) if image_items else "",
             "used_images": [str(item["image_path"]) for item in image_items],
         }
@@ -218,6 +229,33 @@ class FfmpegPreviewRenderer:
             str(output_path),
         ]
 
+    def _build_placeholder_image_command(
+        self,
+        output_path: Path,
+        resolution: str,
+        title: str,
+        focus: str,
+        shot_type: str,
+    ) -> List[str]:
+        text = self._placeholder_text(title, focus, shot_type)
+        draw_text = self._escape_drawtext(text)
+        filter_text = (
+            f"color=c=#101018:s={resolution}:d=1,"
+            f"drawtext=text='{draw_text}':fontcolor=white:fontsize=44:"
+            f"x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.45:boxborderw=24"
+        )
+        return [
+            self.ffmpeg_path,
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            filter_text,
+            "-frames:v",
+            "1",
+            str(output_path),
+        ]
+
     def _collect_existing_image_items(self, episode_dir: Path, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
         for scene in plan.get("scenes", []):
@@ -238,6 +276,30 @@ class FfmpegPreviewRenderer:
                         }
                     )
         return items
+
+    def _generate_placeholder_keyframes(self, episode_dir: Path, plan: Dict[str, Any], resolution: str) -> int:
+        count = 0
+        for scene in plan.get("scenes", []):
+            title = str(scene.get("title", ""))
+            for slot in scene.get("image_slots", []):
+                rel_path = str(slot.get("expected_image", ""))
+                if not rel_path:
+                    continue
+                output_path = episode_dir / rel_path
+                if output_path.exists():
+                    continue
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                command = self._build_placeholder_image_command(
+                    output_path=output_path,
+                    resolution=resolution,
+                    title=title,
+                    focus=str(slot.get("visual_focus", "")),
+                    shot_type=str(slot.get("shot_type", "keyframe")),
+                )
+                completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")
+                if completed.returncode == 0 and output_path.exists():
+                    count += 1
+        return count
 
     def _write_image_concat_file(self, image_items: List[Dict[str, Any]], output_path: Path) -> None:
         lines: List[str] = []
@@ -271,3 +333,18 @@ class FfmpegPreviewRenderer:
                 }
             )
         output_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _placeholder_text(self, title: str, focus: str, shot_type: str) -> str:
+        merged = f"{title}\n{shot_type}\n{focus}".strip()
+        merged = " ".join(merged.split())
+        if len(merged) > 160:
+            merged = merged[:157] + "..."
+        return merged
+
+    def _escape_drawtext(self, text: str) -> str:
+        escaped = text.replace("\\", "\\\\")
+        escaped = escaped.replace(":", "\\:")
+        escaped = escaped.replace("'", "\\'")
+        escaped = escaped.replace("%", "\\%")
+        escaped = escaped.replace("\n", "\\n")
+        return escaped
