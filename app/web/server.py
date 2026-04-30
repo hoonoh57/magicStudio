@@ -114,6 +114,8 @@ class MagicStudioHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/episode/save":
                 episode_title = str(payload.get("episode_title", episode_id))
                 self._json({"ok": True, **services.save_episode(self.workspace, title, episode_id, scenario, episode_title)})
+            elif parsed.path == "/api/episode/delete":
+                self._json({"ok": True, **services.delete_episode(self.workspace, title, episode_id)})
             elif parsed.path == "/api/scenario/build":
                 self._json({"ok": True, **services.build_pipeline(self.workspace, title, idea, scenario, episode_id)})
             elif parsed.path == "/api/tts/synth":
