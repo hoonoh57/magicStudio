@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -8,6 +9,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from app.core.asset_registry import AssetRegistry
 from app.core.bible_builder import BibleBuilder
 from app.core.idea_analyzer import IdeaAnalyzer
 from app.core.production_planner import ProductionPlanner
@@ -41,6 +43,10 @@ DEFAULT_SCENARIO = """# 서울역 전광판
 검의 단면에서 검은 기운이 아주 느리게 자라고 있었다.
 권무혁이 말했다. 삼 년 뒤, 서울 한복판에서 저 봉인이 터질 수 있다.
 """
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def main() -> int:
@@ -83,6 +89,17 @@ def main() -> int:
 
     production_files = ProductionPlanner().save_all(vml_episode, timeline, episode_dir)
 
+    preview_render_plan = read_json(episode_dir / "preview_render_plan.json")
+    tts_script = read_json(episode_dir / "tts_script.json")
+    asset_manifest = AssetRegistry().build_and_save(
+        episode_dir=episode_dir,
+        vml_episode=vml_episode,
+        preview_render_plan=preview_render_plan,
+        tts_script=tts_script,
+        render_result=None,
+    )
+    asset_manifest_path = episode_dir / "asset_manifest.json"
+
     print("=== magicStudio MVP Smoke Pipeline ===")
     print(f"project_id: {project.project_id}")
     print(f"project_root: {project.root_path}")
@@ -93,6 +110,9 @@ def main() -> int:
     print(f"captions: {srt_path}")
     for name, path in production_files.items():
         print(f"{name}: {path}")
+    print(f"asset_manifest: {asset_manifest_path}")
+    print(f"asset_existing: {asset_manifest['summary']['existing']} / {asset_manifest['summary']['total']}")
+    print(f"asset_missing: {asset_manifest['summary']['missing']}")
     print(f"scene_count: {len(scenes)}")
     print(f"duration_sec: {timeline.get('duration_sec')}")
     return 0
