@@ -1,0 +1,11 @@
+[project]
+name = "magicstudio"
+version = "0.1.0"
+description = "A general-purpose one-person AI production studio OS."
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
