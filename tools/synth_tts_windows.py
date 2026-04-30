@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -67,29 +68,32 @@ def synthesize_one(
 ) -> Dict[str, Any]:
     absolute_output_path = output_path.resolve()
     absolute_output_path.parent.mkdir(parents=True, exist_ok=True)
-    if absolute_output_path.exists() and absolute_output_path.stat().st_size == 0:
+    if absolute_output_path.exists():
         absolute_output_path.unlink()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
         text_path = temp_root / "tts_text.txt"
         script_path = temp_root / "synth.ps1"
+        temp_output_path = temp_root / "sapi_output.wav"
         write_text(text_path, text)
+
         escaped_voice = ps_single_quote(voice)
         escaped_text_path = ps_single_quote(str(text_path.resolve()))
-        escaped_output_path = ps_single_quote(str(absolute_output_path))
+        escaped_temp_output_path = ps_single_quote(str(temp_output_path.resolve()))
+
+        # SAPI can be unreliable with non-ASCII output paths on some Windows setups.
+        # Therefore the voice engine writes to an ASCII temp path first, and Python
+        # copies the finished wav to the final Korean project path.
         script = f'''
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Speech
 $text = Get-Content -LiteralPath '{escaped_text_path}' -Raw -Encoding UTF8
-$outDir = Split-Path -Parent '{escaped_output_path}'
-if (!(Test-Path -LiteralPath $outDir)) {{
-  New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-}}
-if (Test-Path -LiteralPath '{escaped_output_path}') {{
-  Remove-Item -LiteralPath '{escaped_output_path}' -Force
+$outPath = '{escaped_temp_output_path}'
+if (Test-Path -LiteralPath $outPath) {{
+  Remove-Item -LiteralPath $outPath -Force
 }}
 $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer
 try {{
@@ -98,13 +102,21 @@ try {{
   }}
   $synth.Rate = {rate}
   $synth.Volume = {volume}
-  $format = New-Object System.Speech.AudioFormat.SpeechAudioFormatInfo(48000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
-  $synth.SetOutputToWaveFile('{escaped_output_path}', $format)
+  $synth.SetOutputToWaveFile($outPath)
   $synth.Speak($text)
   $synth.SetOutputToNull()
 }} finally {{
   $synth.Dispose()
 }}
+if (!(Test-Path -LiteralPath $outPath)) {{
+  throw "SAPI did not create output file: $outPath"
+}}
+$length = (Get-Item -LiteralPath $outPath).Length
+if ($length -le 0) {{
+  throw "SAPI created empty output file: $outPath"
+}}
+Write-Output ("SAPI_OUTPUT=" + $outPath)
+Write-Output ("SAPI_SIZE=" + $length)
 '''
         write_text(script_path, script)
         completed = subprocess.run(
@@ -114,14 +126,22 @@ try {{
             encoding="utf-8",
             errors="replace",
         )
+
+        copied = False
+        if completed.returncode == 0 and temp_output_path.exists() and temp_output_path.stat().st_size > 0:
+            shutil.copyfile(temp_output_path, absolute_output_path)
+            copied = absolute_output_path.exists() and absolute_output_path.stat().st_size > 0
+
         return {
-            "ok": completed.returncode == 0 and absolute_output_path.exists() and absolute_output_path.stat().st_size > 0,
+            "ok": copied,
             "returncode": completed.returncode,
             "stdout": completed.stdout,
             "stderr": completed.stderr,
             "output_path": str(output_path),
             "absolute_output_path": str(absolute_output_path),
+            "temp_output_path": str(temp_output_path),
             "size_bytes": absolute_output_path.stat().st_size if absolute_output_path.exists() else 0,
+            "temp_size_bytes": temp_output_path.stat().st_size if temp_output_path.exists() else 0,
         }
 
 
@@ -201,8 +221,11 @@ def main() -> int:
     for item in summary["results"]:
         status = "OK" if item["ok"] else "FAIL"
         print(f"{status}: {item['scene_id']} -> {item['absolute_output_path']} ({item['size_bytes']} bytes)")
-        if not item["ok"] and item.get("stderr"):
-            print(item["stderr"], file=sys.stderr)
+        if not item["ok"]:
+            if item.get("stdout"):
+                print(item["stdout"])
+            if item.get("stderr"):
+                print(item["stderr"], file=sys.stderr)
     return 0 if summary["ok"] else 1
 
 
