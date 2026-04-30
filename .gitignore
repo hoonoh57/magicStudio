@@ -11,12 +11,47 @@ Thumbs.db
 .vscode/
 .idea/
 
-# magicStudio generated outputs
+# magicStudio local user content / private project data
+# 사용자 시나리오, 원고, 이미지, 동영상, 음성, 렌더 결과물은 서버에 올리지 않는다.
+local_projects/
+user_projects/
+story_archive/
+projects/*/source/
+projects/*/scenario/
+projects/*/scenarios/
+projects/*/story/
+projects/*/stories/
+projects/*/drafts/
+projects/*/assets/raw/
+projects/*/assets/user/
+projects/*/assets/images/
+projects/*/assets/videos/
+projects/*/assets/audio/
+projects/*/assets/generated/
 projects/*/renders/
 projects/*/exports/
-projects/*/assets/generated/
+
+# Allow safe templates/placeholders when needed
+!projects/.gitkeep
+!project_templates/**
+
+# Generated media / large binary outputs
 *.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
 *.wav
+*.mp3
+*.flac
+*.aac
+*.m4a
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.psd
+*.kra
 *.tmp
 *.bak
 
