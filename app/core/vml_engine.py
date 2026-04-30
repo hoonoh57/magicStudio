@@ -58,6 +58,7 @@ class VmlEngine:
                 "tts_ref": "narration",
                 "quality_score": self._narration_quality_score(scene, narration_text),
                 "preserved_keywords": self._preserved_keywords(narration_text),
+                "policy": "preserve_full_scene_text",
             },
             "audio": {
                 "bgm": self._bgm_cue(scene),
@@ -74,6 +75,7 @@ class VmlEngine:
                 "다음 장면과 연결되는 후킹 확인",
                 "작가 원고의 핵심 문장이 보존되었는지 확인",
                 "밥/법/검/봉인 등 모티프 문장이 누락되지 않았는지 확인",
+                "TTS narration.text가 scene.source_text 전체를 보존하는지 확인",
             ],
         }
         return vml
@@ -113,19 +115,18 @@ class VmlEngine:
         ]
 
     def _narration_from_source(self, scene: Scene) -> str:
+        """Return the full scene text for narration.
+
+        Earlier versions selected only two or three representative sentences. That
+        was useful for a teaser, but wrong for the production pipeline because TTS
+        must read the selected episode/scene text, not just a summary. SceneBreaker
+        is now responsible for splitting long episode text into several manageable
+        scenes; each scene narration preserves its full source_text.
+        """
         text = self._normalize_text(scene.source_text)
         if not text:
             return f"{scene.title}."
-
-        sentences = self._split_sentences(text)
-        if not sentences:
-            return text
-
-        if scene.dramatic_function == "hook_opening":
-            return self._join_sentences(self._select_sentences(sentences, required_count=2))
-        if scene.dramatic_function == "next_episode_hook":
-            return self._join_sentences(self._select_sentences(sentences, required_count=3, prefer_all=True))
-        return self._join_sentences(self._select_sentences(sentences, required_count=3))
+        return text
 
     def _select_sentences(self, sentences: List[str], required_count: int, prefer_all: bool = False) -> List[str]:
         if prefer_all and len(sentences) <= required_count + 1:
@@ -173,8 +174,10 @@ class VmlEngine:
             score += 30.0 * (len(preserved_keywords) / len(source_keywords))
         if narration_text and narration_text[-1] in ".?!。！？다요오까":
             score += 5.0
-        if 25 <= len(narration_text) <= 160:
-            score += 5.0
+        source_compact = self._normalize_text(scene.source_text)
+        if source_compact:
+            coverage = min(1.0, len(narration_text) / max(1, len(source_compact)))
+            score += 5.0 * coverage
         if score > 100.0:
             return 100.0
         return round(score, 2)
